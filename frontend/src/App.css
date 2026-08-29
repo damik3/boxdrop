@@ -1,0 +1,118 @@
+.app-shell {
+  min-height: 100vh;
+  padding: 4rem 1.5rem;
+  box-sizing: border-box;
+}
+
+.hero {
+  max-width: 48rem;
+  margin: 0 auto 3rem;
+  text-align: left;
+}
+
+.hero__eyebrow {
+  display: inline-block;
+  margin-bottom: 1rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 1.05;
+}
+
+.hero__copy {
+  max-width: 42rem;
+  font-size: 1.125rem;
+  line-height: 1.7;
+  color: #475569;
+}
+
+.panel-grid {
+  max-width: 72rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.panel {
+  padding: 1.5rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 1rem;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}
+
+.panel ul,
+.panel ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #334155;
+  line-height: 1.8;
+}
+
+.panel--wide {
+  grid-column: 1 / -1;
+}
+
+.stack-list {
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.stack-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stack-list div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.stack-list dt {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.stack-list dd {
+  margin: 0;
+  color: #475569;
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    padding: 2.5rem 1rem;
+  }
+
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel--wide {
+    grid-column: auto;
+  }
+
+  .stack-list div {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}

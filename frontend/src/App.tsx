@@ -1,73 +1,52 @@
+import { useState } from 'react'
 import './App.css'
-
-const apiFeatures = [
-  'Authentication and access control',
-  'File and folder metadata',
-  'Presigned single-part and multipart uploads',
-  'Authorized downloads',
-  'File sharing and shared-with-me views',
-]
-
-const roadmap = [
-  'Spring Boot backend with MongoDB and MinIO integration',
-  'React frontend for upload, browsing, download, and sharing',
-  'Docker Compose environment for local development',
-]
+import { AuthenticatedApp } from './auth/AuthenticatedApp'
+import { AuthForm } from './auth/AuthForm'
+import { useAuth } from './auth/useAuth'
+import type { AuthMode } from './auth/types'
 
 function App() {
+  const { authState, authenticate, logout } = useAuth()
+  const [mode, setMode] = useState<AuthMode>('login')
+  const [busy, setBusy] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  if (authState) {
+    return <AuthenticatedApp authState={authState} onLogout={logout} />
+  }
+
+  async function handleSubmit(currentMode: AuthMode, values: { email: string; password: string }) {
+    setBusy(true)
+    setErrorMessage(null)
+
+    try {
+      await authenticate(currentMode, values)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Authentication failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <main className="app-shell">
+    <main className="app-shell auth-layout">
       <section className="hero">
         <span className="hero__eyebrow">Dropbox clone learning project</span>
-        <h1>Local-first scaffolding for the core file platform.</h1>
+        <h1>Auth-first frontend scaffold for file ownership and sharing.</h1>
         <p className="hero__copy">
-          This starter focuses on the first iteration: upload, download, sharing,
-          multipart uploads, and the storage metadata model. Automatic sync stays
-          out of scope for now.
+          This screen is a minimal shell for registration and login against the Spring Boot JWT
+          backend. Once authenticated, the app switches into a protected workspace shell that will
+          host the file browser, uploads, downloads, and sharing flows.
         </p>
       </section>
 
-      <section className="panel-grid">
-        <article className="panel">
-          <h2>Current API scope</h2>
-          <ul>
-            {apiFeatures.map((feature) => (
-              <li key={feature}>{feature}</li>
-            ))}
-          </ul>
-        </article>
-
-        <article className="panel">
-          <h2>Stack</h2>
-          <dl className="stack-list">
-            <div>
-              <dt>Backend</dt>
-              <dd>Spring Boot</dd>
-            </div>
-            <div>
-              <dt>Frontend</dt>
-              <dd>React + Vite</dd>
-            </div>
-            <div>
-              <dt>Metadata</dt>
-              <dd>MongoDB</dd>
-            </div>
-            <div>
-              <dt>Object storage</dt>
-              <dd>MinIO</dd>
-            </div>
-          </dl>
-        </article>
-
-        <article className="panel panel--wide">
-          <h2>Implementation roadmap</h2>
-          <ol>
-            {roadmap.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ol>
-        </article>
-      </section>
+      <AuthForm
+        mode={mode}
+        busy={busy}
+        errorMessage={errorMessage}
+        onSubmit={(values) => handleSubmit(mode, values)}
+        onModeChange={setMode}
+      />
     </main>
   )
 }

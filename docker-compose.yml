@@ -37,14 +37,14 @@ services:
     ports:
       - "8080:8080"
 
-  frontend:
-    build:
-      context: ./frontend
-    container_name: dropbox-clone-frontend
-    depends_on:
-      - backend
-    ports:
-      - "5173:80"
+#  frontend:
+#    build:
+#      context: ./frontend
+#    container_name: dropbox-clone-frontend
+#    depends_on:
+#      - backend
+#    ports:
+#      - "5173:80"
 
 volumes:
   mongodb_data:

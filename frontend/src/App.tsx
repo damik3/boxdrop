@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './App.css'
-import { AuthenticatedApp } from './auth/AuthenticatedApp'
+import { AuthenticatedApp } from './AuthenticatedApp'
 import { AuthForm } from './auth/AuthForm'
 import { useAuth } from './auth/useAuth'
 import type { AuthMode } from './auth/types'

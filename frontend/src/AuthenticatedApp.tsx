@@ -1,8 +1,8 @@
 import type { AuthState } from './auth/types.ts'
-import {useEffect} from "react";
-import {getFiles} from "./api/fileApi.ts";
-import type {FileMetadata} from "./api/types.ts";
-import * as React from "react";
+import { useEffect } from 'react'
+import * as React from 'react'
+import { getFiles, uploadFile } from './api/fileApi.ts'
+import type { FileMetadata } from './api/types.ts'
 
 interface AuthenticatedAppProps {
   authState: AuthState
@@ -16,16 +16,40 @@ interface FileInput {
 export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps) {
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [files, setFiles] = React.useState<FileMetadata[]>([])
-  const [fileInputState, setFileInputState] = React.useState<FileInput>({file: null});
+  const [fileInputState, setFileInputState] = React.useState<FileInput>({ file: null })
+  const [loadErrorMessage, setLoadErrorMessage] = React.useState<string | null>(null)
+  const [uploadErrorMessage, setUploadErrorMessage] = React.useState<string | null>(null)
+  const [loadingFiles, setLoadingFiles] = React.useState(true)
+  const [uploadingFile, setUploadingFile] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement | null>(null)
 
-  useEffect(() => {
-    const loadFiles = async () => {
-      const result = await getFiles()
+  const loadFiles = React.useCallback(async () => {
+    setLoadingFiles(true)
+    setLoadErrorMessage(null)
+
+    try {
+      const result = await getFiles(authState)
       setFiles(result)
+    } catch (error) {
+      setLoadErrorMessage(error instanceof Error ? error.message : 'Failed to load files')
+    } finally {
+      setLoadingFiles(false)
     }
+  }, [authState])
+
+  useEffect(() => {
     void loadFiles()
-  }, [])
+  }, [loadFiles])
+
+  const closeUploadModal = (): void => {
+    setIsModalOpen(false)
+    setUploadingFile(false)
+    setUploadErrorMessage(null)
+    setFileInputState({ file: null })
+    if (fileRef.current) {
+      fileRef.current.value = ''
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -34,12 +58,22 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
       return
     }
 
-    console.log('File to be uploaded', fileInputState.file.name)
-    setIsModalOpen(false)
+    setUploadingFile(true)
+    setUploadErrorMessage(null)
+
+    try {
+      await uploadFile(authState, fileInputState.file)
+      closeUploadModal()
+      await loadFiles()
+    } catch (error) {
+      setUploadErrorMessage(error instanceof Error ? error.message : 'File upload failed')
+      setUploadingFile(false)
+    }
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const selectedFile = event.target.files?.[0] ?? null
+    setUploadErrorMessage(null)
     setFileInputState({ file: selectedFile })
   }
 
@@ -109,12 +143,14 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                 </div>
               ) : null}
 
+              {uploadErrorMessage ? <p className="auth-form__error">{uploadErrorMessage}</p> : null}
+
               <div className="modal__actions">
-                <button type="button" className="secondary-button" onClick={() => setIsModalOpen(false)}>
+                <button type="button" className="secondary-button" onClick={closeUploadModal} disabled={uploadingFile}>
                   Cancel
                 </button>
-                <button type="submit" className="primary-button" disabled={!fileInputState.file}>
-                  Upload
+                <button type="submit" className="primary-button" disabled={!fileInputState.file || uploadingFile}>
+                  {uploadingFile ? 'Uploading...' : 'Upload'}
                 </button>
               </div>
             </form>
@@ -136,6 +172,21 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                 </tr>
               </thead>
               <tbody>
+                {loadingFiles ? (
+                  <tr>
+                    <td colSpan={4}>Loading files...</td>
+                  </tr>
+                ) : null}
+                {!loadingFiles && loadErrorMessage ? (
+                  <tr>
+                    <td colSpan={4}>{loadErrorMessage}</td>
+                  </tr>
+                ) : null}
+                {!loadingFiles && !loadErrorMessage && files.length === 0 ? (
+                  <tr>
+                    <td colSpan={4}>No files available yet.</td>
+                  </tr>
+                ) : null}
                 {files.map((file: FileMetadata) => (
                   <tr key={file.url}>
                     <td>{file.name}</td>

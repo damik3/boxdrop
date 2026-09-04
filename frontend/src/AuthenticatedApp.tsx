@@ -46,19 +46,21 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
   return (
     <main className="app-shell">
       <section className="hero hero--compact">
-        <div>
+        <div className="hero__content">
           <span className="hero__eyebrow">Authenticated session</span>
           <h1>Welcome, {authState.email}</h1>
           <p className="hero__copy">
             Take a look at your files.
           </p>
         </div>
-        <button type="button" className="primary-button" onClick={() => setIsModalOpen(true)}>
-          Upload File
-        </button>
-        <button type="button" className="secondary-button" onClick={onLogout}>
-          Log out
-        </button>
+        <div className="hero__actions">
+          <button type="button" className="primary-button" onClick={() => setIsModalOpen(true)}>
+            Upload File
+          </button>
+          <button type="button" className="secondary-button" onClick={onLogout}>
+            Log out
+          </button>
+        </div>
       </section>
 
       {isModalOpen && (
@@ -123,16 +125,30 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
       <section className="panel-grid">
         <article className="panel panel--wide">
           <h2>Files</h2>
-          <dl className="stack-list">
-            {files.map((file: FileMetadata) => (
-                <div>
-                  <dt>{file.name}</dt>
-                  <dd>Size: {file.size}</dd>
-                  <dd>Uploader: {file.uploadedBy}</dd>
-                  <dd><a href={file.url} target={"_blank"} rel={"noopener noreferrer"}>Download</a></dd>
-                </div>
-            ))}
-          </dl>
+          <div className="files-table-container">
+            <table className="files-table">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Size</th>
+                  <th scope="col">Uploader</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map((file: FileMetadata) => (
+                  <tr key={file.url}>
+                    <td>{file.name}</td>
+                    <td>{file.size}</td>
+                    <td>{file.uploadedBy}</td>
+                    <td>
+                      <a href={file.url} target="_blank" rel="noopener noreferrer">Download</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </article>
       </section>
     </main>

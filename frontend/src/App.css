@@ -23,8 +23,21 @@
   margin: 0 auto 2rem;
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1.5rem;
   align-items: flex-start;
+}
+
+.hero__content {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
 }
 
 .hero__eyebrow {
@@ -95,33 +108,40 @@
   grid-column: 1 / -1;
 }
 
-.stack-list {
-  margin: 0;
-  display: grid;
-  gap: 1rem;
+.files-table-container {
+  width: 100%;
+  overflow-x: auto;
 }
 
-.stack-list div {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.75rem;
+.files-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+.files-table th,
+.files-table td {
+  text-align: left;
+  padding: 0.75rem 0.5rem;
   border-bottom: 1px solid #e2e8f0;
+  color: #334155;
 }
 
-.stack-list div:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.stack-list dt {
+.files-table th {
   color: #0f172a;
+  font-size: 0.9rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
-.stack-list dd {
-  margin: 0;
-  color: #475569;
+.files-table td:first-child {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.files-table th:last-child,
+.files-table td:last-child {
+  text-align: right;
 }
 
 .auth-card {
@@ -224,6 +244,10 @@
     flex-direction: column;
   }
 
+  .hero__actions {
+    justify-content: flex-start;
+  }
+
   .panel--wide {
     grid-column: auto;
   }
@@ -234,9 +258,9 @@
     padding: 2.5rem 1rem;
   }
 
-  .stack-list div {
-    flex-direction: column;
-    gap: 0.25rem;
+  .hero__actions .primary-button,
+  .hero__actions .secondary-button {
+    width: 100%;
   }
 }
 

@@ -28,15 +28,18 @@ export async function getFiles(authState: AuthState): Promise<FileMetadata[]> {
 }
 
 export async function uploadFile(authState: AuthState, file: File): Promise<void> {
-  const formData = new FormData()
-  formData.append('file', file)
-
+  const fileMetadata = {
+    name: file.name,
+    size: file.size,
+    mimeType: file.type,
+  }
   const response = await fetch(`${API_BASE_URL}/files`, {
     method: 'POST',
     headers: {
       Authorization: `${authState.tokenType} ${authState.accessToken}`,
+      'Content-Type': 'application/json',
     },
-    body: formData,
+    body: JSON.stringify(fileMetadata),
   })
 
   if (!response.ok) {

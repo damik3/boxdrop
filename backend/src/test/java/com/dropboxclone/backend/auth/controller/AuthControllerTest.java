@@ -10,8 +10,6 @@ import com.dropboxclone.backend.auth.dto.LoginRequest;
 import com.dropboxclone.backend.auth.dto.RegisterRequest;
 import com.dropboxclone.backend.auth.service.AuthService;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 class AuthControllerTest {
 

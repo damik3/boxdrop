@@ -6,3 +6,7 @@ export interface FileMetadata {
     uploadedBy: string
     url: string
 }
+
+export interface UploadFileResponse {
+    presignedUrl: string
+}

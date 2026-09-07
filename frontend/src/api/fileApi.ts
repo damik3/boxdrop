@@ -1,5 +1,5 @@
 import type { AuthState } from '../auth/types.ts'
-import type { FileMetadata } from './types.ts'
+import type { FileMetadata, UploadFileResponse } from './types.ts'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 
@@ -27,7 +27,7 @@ export async function getFiles(authState: AuthState): Promise<FileMetadata[]> {
   return response.json() as Promise<FileMetadata[]>
 }
 
-export async function uploadFile(authState: AuthState, file: File): Promise<void> {
+export async function uploadFile(authState: AuthState, file: File): Promise<UploadFileResponse> {
   const fileMetadata = {
     name: file.name,
     size: file.size,
@@ -37,6 +37,7 @@ export async function uploadFile(authState: AuthState, file: File): Promise<void
     method: 'POST',
     headers: {
       Authorization: `${authState.tokenType} ${authState.accessToken}`,
+      Accept: 'application/json',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(fileMetadata),
@@ -45,4 +46,6 @@ export async function uploadFile(authState: AuthState, file: File): Promise<void
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, 'File upload failed'))
   }
+
+  return response.json() as Promise<UploadFileResponse>
 }

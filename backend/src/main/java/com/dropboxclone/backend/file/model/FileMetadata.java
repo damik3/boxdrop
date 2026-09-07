@@ -1,4 +1,4 @@
-package com.dropboxclone.backend.file;
+package com.dropboxclone.backend.file.model;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -21,4 +21,6 @@ public class FileMetadata {
     String uploadedByUserId;
 
     String url;
+
+    FileUploadStatus status;
 }

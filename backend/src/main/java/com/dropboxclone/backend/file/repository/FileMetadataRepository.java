@@ -1,5 +1,6 @@
-package com.dropboxclone.backend.file;
+package com.dropboxclone.backend.file.repository;
 
+import com.dropboxclone.backend.file.model.FileMetadata;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;

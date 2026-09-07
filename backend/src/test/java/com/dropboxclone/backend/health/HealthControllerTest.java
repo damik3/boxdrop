@@ -13,6 +13,7 @@ class HealthControllerTest {
         HealthController controller = new HealthController(
             new StorageProperties(
                 "http://localhost:9000",
+                "http://localhost:9000",
                 "minioadmin",
                 "minioadmin",
                 "dropbox-clone",

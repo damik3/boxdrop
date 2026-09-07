@@ -62,7 +62,8 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
     setUploadErrorMessage(null)
 
     try {
-      await uploadFile(authState, fileInputState.file)
+      const { presignedUrl } = await uploadFile(authState, fileInputState.file)
+      console.log('presignedUrl', presignedUrl)
       closeUploadModal()
       await loadFiles()
     } catch (error) {

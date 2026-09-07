@@ -1,9 +1,11 @@
-package com.dropboxclone.backend.file;
+package com.dropboxclone.backend.file.controller;
 
 
 import com.dropboxclone.backend.auth.security.AuthenticatedUser;
 import com.dropboxclone.backend.file.request.UploadFileRequest;
 import com.dropboxclone.backend.file.response.GetFilesResponse;
+import com.dropboxclone.backend.file.response.UploadFileResponse;
+import com.dropboxclone.backend.file.service.FileService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,22 +30,22 @@ public class FileController {
                 .stream()
                 .map(fileMetadata ->
                         new GetFilesResponse(
-                                fileMetadata.id,
-                                fileMetadata.name,
-                                fileMetadata.size,
-                                fileMetadata.mimeType,
-                                fileMetadata.uploadedByUserId,
-                                fileMetadata.url
+                                fileMetadata.getId(),
+                                fileMetadata.getName(),
+                                fileMetadata.getSize(),
+                                fileMetadata.getMimeType(),
+                                fileMetadata.getUploadedByUserId(),
+                                fileMetadata.getUrl()
                         )
                 )
                 .toList();
     }
 
     @PostMapping
-    public String uploadFile(Authentication authentication, @RequestBody UploadFileRequest uploadFileRequest) {
+    public UploadFileResponse uploadFile(Authentication authentication, @RequestBody UploadFileRequest uploadFileRequest) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
         assert user != null;
-        return fileService.uploadFile(user.id(), uploadFileRequest);
+        return new UploadFileResponse(fileService.uploadFile(user.id(), uploadFileRequest));
     }
 
 }

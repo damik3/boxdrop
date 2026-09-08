@@ -1,7 +1,7 @@
 import type { AuthState } from './auth/types.ts'
 import { useEffect } from 'react'
 import * as React from 'react'
-import { getFiles, uploadFile } from './api/fileApi.ts'
+import {getFiles, markUploadCompleted, requestUploadUrl, uploadFile} from './api/fileApi.ts'
 import type { FileMetadata } from './api/types.ts'
 
 interface AuthenticatedAppProps {
@@ -62,8 +62,11 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
     setUploadErrorMessage(null)
 
     try {
-      const { presignedUrl } = await uploadFile(authState, fileInputState.file)
+      const { fileId, presignedUrl } = await requestUploadUrl(authState, fileInputState.file)
       console.log('presignedUrl', presignedUrl)
+      await uploadFile(presignedUrl, fileInputState.file)
+      console.log('uploadFile completed')
+      await markUploadCompleted(authState, fileId)
       closeUploadModal()
       await loadFiles()
     } catch (error) {

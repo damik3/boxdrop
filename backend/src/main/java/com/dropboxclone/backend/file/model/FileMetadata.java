@@ -2,10 +2,12 @@ package com.dropboxclone.backend.file.model;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Getter
+@Setter
 @Builder(toBuilder = true)
 @Document(collection = "file_metadata")
 public class FileMetadata {
@@ -20,7 +22,7 @@ public class FileMetadata {
 
     String uploadedByUserId;
 
-    String url;
+    String storageKey;
 
     FileUploadStatus status;
 }

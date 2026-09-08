@@ -8,5 +8,6 @@ export interface FileMetadata {
 }
 
 export interface UploadFileResponse {
+    fileId: string
     presignedUrl: string
 }

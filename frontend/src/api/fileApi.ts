@@ -27,13 +27,13 @@ export async function getFiles(authState: AuthState): Promise<FileMetadata[]> {
   return response.json() as Promise<FileMetadata[]>
 }
 
-export async function uploadFile(authState: AuthState, file: File): Promise<UploadFileResponse> {
+export async function requestUploadUrl(authState: AuthState, file: File): Promise<UploadFileResponse> {
   const fileMetadata = {
     name: file.name,
     size: file.size,
     mimeType: file.type,
   }
-  const response = await fetch(`${API_BASE_URL}/files`, {
+  const response = await fetch(`${API_BASE_URL}/files/upload/presigned-url-for-upload`, {
     method: 'POST',
     headers: {
       Authorization: `${authState.tokenType} ${authState.accessToken}`,
@@ -48,4 +48,35 @@ export async function uploadFile(authState: AuthState, file: File): Promise<Uplo
   }
 
   return response.json() as Promise<UploadFileResponse>
+}
+
+export async function uploadFile(url: string, file: File): Promise<void> {
+  const response = await fetch(url,
+      {
+        method: 'PUT',
+        body: file
+      }
+  )
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, 'File upload failed'))
+  }
+}
+
+export async function markUploadCompleted(authState: AuthState, fileId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/files/upload/mark-upload-completed`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `${authState.tokenType} ${authState.accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({fileId: fileId}),
+      }
+  )
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, 'File upload failed'))
+  }
 }

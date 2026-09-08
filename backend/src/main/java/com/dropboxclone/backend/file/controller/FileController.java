@@ -2,9 +2,10 @@ package com.dropboxclone.backend.file.controller;
 
 
 import com.dropboxclone.backend.auth.security.AuthenticatedUser;
-import com.dropboxclone.backend.file.request.UploadFileRequest;
+import com.dropboxclone.backend.file.request.GetPresignedUrlRequest;
+import com.dropboxclone.backend.file.request.MarkUploadCompletedRequest;
 import com.dropboxclone.backend.file.response.GetFilesResponse;
-import com.dropboxclone.backend.file.response.UploadFileResponse;
+import com.dropboxclone.backend.file.response.GetPresignedUrlResponse;
 import com.dropboxclone.backend.file.service.FileService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -35,17 +36,24 @@ public class FileController {
                                 fileMetadata.getSize(),
                                 fileMetadata.getMimeType(),
                                 fileMetadata.getUploadedByUserId(),
-                                fileMetadata.getUrl()
+                                null
                         )
                 )
                 .toList();
     }
 
-    @PostMapping
-    public UploadFileResponse uploadFile(Authentication authentication, @RequestBody UploadFileRequest uploadFileRequest) {
+    @PostMapping("/upload/presigned-url-for-upload")
+    public GetPresignedUrlResponse getPresignedUrl(Authentication authentication, @RequestBody GetPresignedUrlRequest request) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
         assert user != null;
-        return new UploadFileResponse(fileService.uploadFile(user.id(), uploadFileRequest));
+        return fileService.getPresignedUrlForUpload(user.id(), request);
+    }
+
+    @PostMapping("/upload/mark-upload-completed")
+    public void markUploadCompleted(Authentication authentication, @RequestBody MarkUploadCompletedRequest request) {
+        var user = (AuthenticatedUser) authentication.getPrincipal();
+        assert user != null;
+        fileService.markUploadCompleted(user.id(), request.fileId());
     }
 
 }

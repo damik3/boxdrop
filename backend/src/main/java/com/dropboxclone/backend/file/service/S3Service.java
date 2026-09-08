@@ -3,10 +3,13 @@ package com.dropboxclone.backend.file.service;
 import com.dropboxclone.backend.config.StorageProperties;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
@@ -40,13 +43,26 @@ public class S3Service {
         return s3Presigner.presignPutObject(putObjectPresignRequest);
     }
 
+    public PresignedGetObjectRequest presignGet(String key, Duration ttl) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(storageProperties.bucket())
+                .key(key)
+                .build();
+
+        GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(ttl)
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return s3Presigner.presignGetObject(getObjectPresignRequest);
+    }
+
     public boolean objectExists(String key) {
         try {
-            s3Client.headObject(
-                    HeadObjectRequest.builder()
-                            .bucket(storageProperties.bucket())
-                            .key(key)
-                            .build()
+            s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(storageProperties.bucket())
+                    .key(key)
+                    .build()
             );
             return true;
         } catch (NoSuchKeyException exception) {

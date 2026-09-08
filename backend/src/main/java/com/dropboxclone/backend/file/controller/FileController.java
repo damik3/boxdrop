@@ -4,6 +4,7 @@ package com.dropboxclone.backend.file.controller;
 import com.dropboxclone.backend.auth.security.AuthenticatedUser;
 import com.dropboxclone.backend.file.request.GetPresignedUrlRequest;
 import com.dropboxclone.backend.file.request.MarkUploadCompletedRequest;
+import com.dropboxclone.backend.file.response.DownloadFileResponse;
 import com.dropboxclone.backend.file.response.GetFilesResponse;
 import com.dropboxclone.backend.file.response.GetPresignedUrlResponse;
 import com.dropboxclone.backend.file.service.FileService;
@@ -54,6 +55,13 @@ public class FileController {
         var user = (AuthenticatedUser) authentication.getPrincipal();
         assert user != null;
         fileService.markUploadCompleted(user.id(), request.fileId());
+    }
+
+    @GetMapping("/download/{fileId}")
+    public DownloadFileResponse getDownloadLink(Authentication authentication,  @PathVariable String fileId) {
+        var user = (AuthenticatedUser) authentication.getPrincipal();
+        assert user != null;
+        return new DownloadFileResponse(fileService.getDownloadLink(user.id(), fileId));
     }
 
 }

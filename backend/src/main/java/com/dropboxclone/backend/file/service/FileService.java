@@ -68,25 +68,42 @@ public class FileService {
     }
 
     public void markUploadCompleted(String userId, String fileId) {
-        Optional<FileMetadata> fileMetadataOptional = fileMetadataRepository.findById(fileId);
+        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
 
-        if (fileMetadataOptional.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found");
+        if (!fileMetadata.getUploadedByUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is not owner of file");
         }
 
-        fileMetadataOptional.ifPresent(fileMetadata -> {
-            if (!fileMetadata.getUploadedByUserId().equals(userId)) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is not owner of file");
-            }
-            if (fileMetadata.getStatus() == FileUploadStatus.COMPLETED) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "File is already uploaded");
-            }
-            String key = fileMetadata.getStorageKey();
-            if (key == null || !s3Service.objectExists(key)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded object not found in storage");
-            }
-            fileMetadata.setStatus(FileUploadStatus.COMPLETED);
-            fileMetadataRepository.save(fileMetadata);
-        });
+        if (fileMetadata.getStatus() == FileUploadStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "File is already uploaded");
+        }
+
+        String key = fileMetadata.getStorageKey();
+        if (key == null || !s3Service.objectExists(key)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded object not found in storage");
+        }
+
+        fileMetadata.setStatus(FileUploadStatus.COMPLETED);
+        fileMetadataRepository.save(fileMetadata);
     }
+
+    public String getDownloadLink(String userId, String fileId) {
+        FileMetadata file = fileMetadataRepository.findById(fileId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
+
+        System.out.println("download request fileId=" + fileId + ", userId=" + userId + ", storageKey=" + file.getStorageKey());
+
+        if (!file.getUploadedByUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+        }
+
+        if (file.getStorageKey() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing storage key");
+        }
+
+        return s3Service.presignGet(file.getStorageKey(), Duration.ofMinutes(10)).url().toString();
+    }
+
+
 }

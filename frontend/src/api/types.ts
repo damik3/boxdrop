@@ -1,5 +1,5 @@
 export interface FileMetadata {
-    id: number
+    id: string
     name: string
     size: number
     mimeType: string
@@ -10,4 +10,8 @@ export interface FileMetadata {
 export interface UploadFileResponse {
     fileId: string
     presignedUrl: string
+}
+
+export interface GetDownloadUrlResponse {
+    url: string
 }

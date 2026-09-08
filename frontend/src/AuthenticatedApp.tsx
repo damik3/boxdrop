@@ -1,7 +1,7 @@
 import type { AuthState } from './auth/types.ts'
 import { useEffect } from 'react'
 import * as React from 'react'
-import {getFiles, markUploadCompleted, requestUploadUrl, uploadFile} from './api/fileApi.ts'
+import {getDownloadUrl, getFiles, markUploadCompleted, requestUploadUrl, uploadFile} from './api/fileApi.ts'
 import type { FileMetadata } from './api/types.ts'
 
 interface AuthenticatedAppProps {
@@ -63,9 +63,7 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
 
     try {
       const { fileId, presignedUrl } = await requestUploadUrl(authState, fileInputState.file)
-      console.log('presignedUrl', presignedUrl)
       await uploadFile(presignedUrl, fileInputState.file)
-      console.log('uploadFile completed')
       await markUploadCompleted(authState, fileId)
       closeUploadModal()
       await loadFiles()
@@ -197,7 +195,16 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                     <td>{file.size}</td>
                     <td>{file.uploadedBy}</td>
                     <td>
-                      <a href={file.url} target="_blank" rel="noopener noreferrer">Download</a>
+                      <a
+                          href="#"
+                          onClick={async (e) => {
+                            e.preventDefault()
+                            const { url } = await getDownloadUrl(authState, file.id)
+                            window.open(url, '_blank', 'noopener,noreferrer')
+                          }}
+                      >
+                        Download
+                      </a>
                     </td>
                   </tr>
                 ))}

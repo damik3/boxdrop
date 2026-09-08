@@ -204,7 +204,7 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                   </tr>
                 ) : null}
                 {files.map((file: FileMetadata) => (
-                  <tr key={file.url}>
+                  <tr key={file.id}>
                     <td>{file.name}</td>
                     <td>{file.size}</td>
                     <td>{file.uploadedBy}</td>

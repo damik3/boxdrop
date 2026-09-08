@@ -116,6 +116,6 @@ export async function deleteFile(authState: AuthState, fileId: string): Promise<
   )
 
   if (!response.ok) {
-    throw new Error(await parseErrorMessage(response, 'getDownloadUrl failed'))
+    throw new Error(await parseErrorMessage(response, 'deleteFile failed'))
   }
 }

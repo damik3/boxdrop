@@ -4,28 +4,29 @@
 
 - `frontend/`: React + Vite UI for auth, file browsing, and upload flows.
 - `backend/`: Spring Boot API with JWT auth and health endpoints.
-- `design/design.md`: High-level product and system-design target for future iterations.
+- `design/design.md`: High-level product and system-design target for future iterations; read it before making architectural changes.
 - `docker-compose.yml`: Local stack wiring for app services and infrastructure.
 
 ## Current implementation status
 
 - Auth is working end-to-end in the UI against the backend JWT endpoints.
-- The frontend file area is still work in progress.
-- The frontend now sends authenticated `GET /api/files` and `POST /api/files` requests.
-- The backend does **not** implement file endpoints yet, so frontend file actions may surface backend errors until that lands.
-- The design doc points toward a future presigned-upload flow, but the current frontend integration is a simpler direct backend call for now.
+- The protected file area is now wired up in the frontend for listing, uploading, downloading, and deleting files.
+- The backend already exposes `/api/files` endpoints for listing, presigned upload URLs, upload completion, downloads, and deletes.
+- The backend file flow uses presigned upload URLs and a CDN-backed download link instead of a direct upload/download passthrough.
+- The design doc still reflects the broader system-design target; the implementation is now closer to that shape than before.
 
 ## Frontend conventions
 
 - API base URL comes from `VITE_API_BASE_URL` and defaults to `http://localhost:8080/api`.
 - Auth state is stored in local storage and includes `accessToken` plus `tokenType`; protected API calls should send `Authorization: <tokenType> <accessToken>`.
 - Match existing React patterns in `App.tsx`, `AuthenticatedApp.tsx`, and `frontend/src/auth/*`: local component state, explicit async error handling, and simple presentational CSS in `App.css`.
+- The authenticated shell currently owns file actions directly; keep API errors visible rather than silently mocking missing backend behavior.
 
 ## Backend conventions
 
 - API routes are namespaced under `/api`.
-- Security is stateless JWT auth; only health and auth endpoints are currently public.
-- If you add file endpoints later, keep them aligned with the protected frontend calls and the longer-term design in `design/design.md`.
+- Security is stateless JWT auth; only health and auth endpoints are public.
+- Keep file endpoints aligned with the protected frontend calls and the longer-term design in `design/design.md`.
 
 ## Working guidance for future agents
 

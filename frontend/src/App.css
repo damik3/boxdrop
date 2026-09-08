@@ -141,7 +141,7 @@
 
 .files-table th:last-child,
 .files-table td:last-child {
-  text-align: right;
+  text-align: center;
 }
 
 .auth-card {

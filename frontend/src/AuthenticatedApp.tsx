@@ -1,7 +1,7 @@
 import type { AuthState } from './auth/types.ts'
 import { useEffect } from 'react'
 import * as React from 'react'
-import {getDownloadUrl, getFiles, markUploadCompleted, requestUploadUrl, uploadFile} from './api/fileApi.ts'
+import {deleteFile, getDownloadUrl, getFiles, markUploadCompleted, requestUploadUrl, uploadFile} from './api/fileApi.ts'
 import type { FileMetadata } from './api/types.ts'
 
 interface AuthenticatedAppProps {
@@ -77,6 +77,20 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
     const selectedFile = event.target.files?.[0] ?? null
     setUploadErrorMessage(null)
     setFileInputState({ file: selectedFile })
+  }
+
+  const handleDeleteFile = async (file: FileMetadata): Promise<void> => {
+    const confirmed = window.confirm(`Are you sure you want to delete "${file.name}"?`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await deleteFile(authState, file.id)
+      await loadFiles()
+    } catch (error) {
+      setLoadErrorMessage(error instanceof Error ? error.message : 'Failed to delete file')
+    }
   }
 
   return (
@@ -194,7 +208,7 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                     <td>{file.name}</td>
                     <td>{file.size}</td>
                     <td>{file.uploadedBy}</td>
-                    <td>
+                    <td style={{display: 'flex', justifyContent: 'space-between'}}>
                       <a
                           href="#"
                           onClick={async (e) => {
@@ -204,6 +218,15 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                           }}
                       >
                         Download
+                      </a>
+                      <a
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            void handleDeleteFile(file)
+                          }}
+                      >
+                          Delete
                       </a>
                     </td>
                   </tr>

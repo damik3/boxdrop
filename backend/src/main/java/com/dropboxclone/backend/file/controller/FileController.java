@@ -64,4 +64,11 @@ public class FileController {
         return new DownloadFileResponse(fileService.getDownloadLink(user.id(), fileId));
     }
 
+    @DeleteMapping("/{fileId}")
+    public void deleteFile(Authentication authentication,  @PathVariable String fileId) {
+        var user = (AuthenticatedUser) authentication.getPrincipal();
+        assert user != null;
+        fileService.deleteFile(user.id(), fileId);
+    }
+
 }

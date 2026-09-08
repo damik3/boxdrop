@@ -12,7 +12,6 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -92,8 +91,6 @@ public class FileService {
         FileMetadata file = fileMetadataRepository.findById(fileId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
 
-        System.out.println("download request fileId=" + fileId + ", userId=" + userId + ", storageKey=" + file.getStorageKey());
-
         if (!file.getUploadedByUserId().equals(userId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
         }
@@ -103,6 +100,23 @@ public class FileService {
         }
 
         return s3Service.presignGet(file.getStorageKey(), Duration.ofMinutes(10)).url().toString();
+    }
+
+    public void deleteFile(String userId, String fileId) {
+        FileMetadata file = fileMetadataRepository.findById(fileId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
+
+        if (!file.getUploadedByUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+        }
+
+        if (file.getStorageKey() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing storage key");
+        }
+
+        s3Service.deleteObject(file.getStorageKey());
+        
+        fileMetadataRepository.delete(file);
     }
 
 

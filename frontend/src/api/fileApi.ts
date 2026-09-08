@@ -103,3 +103,19 @@ export async function getDownloadUrl(authState: AuthState, fileId: string): Prom
 
   return response.json() as Promise<GetDownloadUrlResponse>
 }
+
+export async function deleteFile(authState: AuthState, fileId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/files/${fileId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `${authState.tokenType} ${authState.accessToken}`,
+          Accept: 'application/json',
+        },
+      }
+  )
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, 'getDownloadUrl failed'))
+  }
+}

@@ -55,12 +55,9 @@ function App() {
     return (
         <main className="app-shell auth-layout">
             <section className="hero">
-                <span className="hero__eyebrow">Dropbox clone learning project</span>
-                <h1>Auth-first frontend scaffold for file ownership and sharing.</h1>
+                <h1>Boxdrop</h1>
                 <p className="hero__copy">
-                    This screen is a minimal shell for registration and login against the Spring Boot JWT
-                    backend. Once authenticated, the app switches into a protected workspace shell that will
-                    host the file browser, uploads, downloads, and sharing flows.
+                    Your personal cloud storage for files and documents.
                 </p>
             </section>
 

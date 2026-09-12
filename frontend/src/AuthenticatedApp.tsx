@@ -98,7 +98,7 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
       <section className="hero hero--compact">
         <div className="hero__content">
           <span className="hero__eyebrow">Authenticated session</span>
-          <h1>Welcome, {authState.email}</h1>
+          <h2>Welcome, {authState.email}</h2>
           <p className="hero__copy">
             Take a look at your files.
           </p>

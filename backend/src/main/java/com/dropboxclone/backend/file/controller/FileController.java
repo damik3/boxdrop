@@ -26,7 +26,6 @@ public class FileController {
     @GetMapping
     public List<GetFilesResponse> getFiles(Authentication authentication) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
-        assert user != null;
         return fileService.
                 getFiles(user.id())
                 .stream()
@@ -46,28 +45,24 @@ public class FileController {
     @PostMapping("/upload/presigned-url-for-upload")
     public GetPresignedUrlResponse getPresignedUrl(Authentication authentication, @RequestBody GetPresignedUrlRequest request) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
-        assert user != null;
         return fileService.getPresignedUrlForUpload(user.id(), request);
     }
 
     @PostMapping("/upload/mark-upload-completed")
     public void markUploadCompleted(Authentication authentication, @RequestBody MarkUploadCompletedRequest request) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
-        assert user != null;
         fileService.markUploadCompleted(user.id(), request.fileId());
     }
 
     @GetMapping("/download/{fileId}")
     public DownloadFileResponse getDownloadLink(Authentication authentication,  @PathVariable String fileId) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
-        assert user != null;
         return new DownloadFileResponse(fileService.getDownloadLink(user.id(), fileId));
     }
 
     @DeleteMapping("/{fileId}")
     public void deleteFile(Authentication authentication,  @PathVariable String fileId) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
-        assert user != null;
         fileService.deleteFile(user.id(), fileId);
     }
 

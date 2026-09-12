@@ -1,17 +1,8 @@
 import type { AuthState } from '../auth/types.ts'
 import type {FileMetadata, GetDownloadUrlResponse, UploadFileResponse} from './types.ts'
+import {parseErrorMessage} from "./common.ts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
-
-async function parseErrorMessage(response: Response, fallbackMessage: string): Promise<string> {
-  const rawBody = await response.text()
-  try {
-    const parsed = JSON.parse(rawBody) as { error?: string; message?: string }
-    return parsed.error ?? parsed.message ?? rawBody ?? fallbackMessage
-  } catch {
-    return rawBody || fallbackMessage
-  }
-}
 
 export async function getFiles(authState: AuthState): Promise<FileMetadata[]> {
   const response = await fetch(`${API_BASE_URL}/files`, {

@@ -15,3 +15,8 @@ export interface UploadFileResponse {
 export interface GetDownloadUrlResponse {
     url: string
 }
+
+export interface User {
+    id: string
+    email: string
+}

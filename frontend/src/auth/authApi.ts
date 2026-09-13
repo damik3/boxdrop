@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080
 async function postAuth(path: 'login' | 'register', values: AuthFormValues): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/${path}`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -25,4 +26,24 @@ export function login(values: AuthFormValues): Promise<AuthResponse> {
 
 export function register(values: AuthFormValues): Promise<AuthResponse> {
   return postAuth('register', values)
+}
+
+export async function refreshAccessToken(): Promise<AuthResponse | null> {
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    return null
+  }
+
+  return response.json() as Promise<AuthResponse>
+}
+
+export async function logoutRequest(): Promise<void> {
+  await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  })
 }

@@ -6,37 +6,45 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.dropboxclone.backend.auth.dto.AuthResponse;
+import com.dropboxclone.backend.auth.dto.AuthResult;
 import com.dropboxclone.backend.auth.dto.LoginRequest;
 import com.dropboxclone.backend.auth.dto.RegisterRequest;
+import com.dropboxclone.backend.auth.security.RefreshTokenService;
 import com.dropboxclone.backend.auth.service.AuthService;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 class AuthControllerTest {
 
     private final AuthService authService = mock(AuthService.class);
-    private final AuthController authController = new AuthController(authService);
+    private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
+    private final AuthController authController = new AuthController(authService, refreshTokenService);
 
     @Test
     void delegatesRegistration() {
         RegisterRequest request = new RegisterRequest("user@example.com", "password123");
-        AuthResponse response = new AuthResponse("token", "Bearer", 3600, "user-1", "user@example.com");
-        when(authService.register(request)).thenReturn(response);
+        AuthResponse expected = new AuthResponse("token", "Bearer", 3600, "user-1", "user@example.com");
+        AuthResult authResult = new AuthResult(expected, "raw_refresh_token");
+        when(authService.register(request)).thenReturn(authResult);
 
-        AuthResponse actual = authController.register(request);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AuthResponse actual = authController.register(request, response);
 
-        assertThat(actual).isEqualTo(response);
+        assertThat(actual).isEqualTo(expected);
         verify(authService).register(request);
     }
 
     @Test
     void delegatesLogin() {
         LoginRequest request = new LoginRequest("user@example.com", "password123");
-        AuthResponse response = new AuthResponse("token", "Bearer", 3600, "user-1", "user@example.com");
-        when(authService.login(request)).thenReturn(response);
+        AuthResponse expected = new AuthResponse("token", "Bearer", 3600, "user-1", "user@example.com");
+        AuthResult authResult = new AuthResult(expected, "raw_refresh_token");
+        when(authService.login(request)).thenReturn(authResult);
 
-        AuthResponse actual = authController.login(request);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AuthResponse actual = authController.login(request, response);
 
-        assertThat(actual).isEqualTo(response);
+        assertThat(actual).isEqualTo(expected);
         verify(authService).login(request);
     }
 }

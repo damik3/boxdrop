@@ -45,14 +45,14 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
     setLoadErrorMessage(null)
 
     try {
-      const result = await getFiles(authState)
+      const result = await getFiles(authState, onLogout)
       setFiles(result)
     } catch (error) {
       setLoadErrorMessage(error instanceof Error ? error.message : 'Failed to load files')
     } finally {
       setLoadingFiles(false)
     }
-  }, [authState])
+  }, [authState, onLogout])
 
   useEffect(() => {
     void loadFiles()
@@ -79,9 +79,9 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
     setUploadErrorMessage(null)
 
     try {
-      const { fileId, presignedUrl } = await requestUploadUrl(authState, fileInputState.file)
+      const { fileId, presignedUrl } = await requestUploadUrl(authState, fileInputState.file, onLogout)
       await uploadFile(presignedUrl, fileInputState.file)
-      await markUploadCompleted(authState, fileId)
+      await markUploadCompleted(authState, fileId, onLogout)
       closeUploadModal()
       await loadFiles()
     } catch (error) {
@@ -103,7 +103,7 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
     }
 
     try {
-      await deleteFile(authState, file.id)
+      await deleteFile(authState, file.id, onLogout)
       await loadFiles()
     } catch (error) {
       setLoadErrorMessage(error instanceof Error ? error.message : 'Failed to delete file')
@@ -230,7 +230,7 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                           href="#"
                           onClick={async (e) => {
                             e.preventDefault()
-                            const { url } = await getDownloadUrl(authState, file.id)
+                            const { url } = await getDownloadUrl(authState, file.id, onLogout)
                             window.open(url, '_blank', 'noopener,noreferrer')
                           }}
                       >

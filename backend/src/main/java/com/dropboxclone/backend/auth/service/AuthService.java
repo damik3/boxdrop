@@ -1,9 +1,11 @@
 package com.dropboxclone.backend.auth.service;
 
 import com.dropboxclone.backend.auth.dto.AuthResponse;
+import com.dropboxclone.backend.auth.dto.AuthResult;
 import com.dropboxclone.backend.auth.dto.LoginRequest;
 import com.dropboxclone.backend.auth.dto.RegisterRequest;
 import com.dropboxclone.backend.auth.security.JwtService;
+import com.dropboxclone.backend.auth.security.RefreshTokenService;
 import com.dropboxclone.backend.user.model.User;
 import com.dropboxclone.backend.user.repository.UserRepository;
 import java.time.Instant;
@@ -19,14 +21,16 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService, RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
     }
 
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResult register(RegisterRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase();
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new ResponseStatusException(CONFLICT, "Email is already registered");
@@ -38,10 +42,10 @@ public class AuthService {
             .createdAt(Instant.now())
             .build());
 
-        return toAuthResponse(user);
+        return toAuthResult(user);
     }
 
-    public AuthResponse login(LoginRequest request) {
+    public AuthResult login(LoginRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase();
         User user = userRepository.findByEmail(normalizedEmail)
             .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
@@ -50,16 +54,38 @@ public class AuthService {
             throw new BadCredentialsException("Invalid email or password");
         }
 
-        return toAuthResponse(user);
+        return toAuthResult(user);
     }
 
-    private AuthResponse toAuthResponse(User user) {
-        return new AuthResponse(
-            jwtService.generateToken(user.getId(), user.getEmail()),
-            "Bearer",
-            jwtService.getAccessTokenTtlSeconds(),
-            user.getId(),
-            user.getEmail()
+    public AuthResult refresh(String rawRefreshToken) {
+        RefreshTokenService.Rotated rotated = refreshTokenService.rotate(rawRefreshToken);
+        User user = userRepository.findById(rotated.userId())
+                .orElseThrow(() -> new BadCredentialsException("User no longer exists"));
+
+        AuthResponse authResponse = new AuthResponse(
+                jwtService.generateToken(user.getId(), user.getEmail()),
+                "Bearer",
+                jwtService.getAccessTokenTtlSeconds(),
+                user.getId(),
+                user.getEmail()
         );
+        return new AuthResult(authResponse, rotated.rawToken());
     }
+
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.revoke(rawRefreshToken);
+    }
+
+    private AuthResult toAuthResult(User user) {
+        AuthResponse authResponse = new AuthResponse(
+                jwtService.generateToken(user.getId(), user.getEmail()),
+                "Bearer",
+                jwtService.getAccessTokenTtlSeconds(),
+                user.getId(),
+                user.getEmail()
+        );
+        RefreshTokenService.Issued issued = refreshTokenService.issue(user.getId());
+        return new AuthResult(authResponse, issued.rawToken());
+    }
+
 }

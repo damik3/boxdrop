@@ -22,7 +22,7 @@ function App() {
             return
         }
         setAuthLoading(true)
-        getUser(authState)
+        getUser(authState, logout)
             .then(user => {
                 if (user) {
                     setUser(user)

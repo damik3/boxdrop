@@ -13,6 +13,23 @@ interface FileInput {
   file: File | null
 }
 
+function formatFileSize(sizeInBytes: number): string {
+  if (sizeInBytes < 1024) {
+    return `${sizeInBytes} B`
+  }
+
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = sizeInBytes / 1024
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`
+}
+
 export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps) {
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [files, setFiles] = React.useState<FileMetadata[]>([])
@@ -206,7 +223,7 @@ export function AuthenticatedApp({ authState, onLogout }: AuthenticatedAppProps)
                 {files.map((file: FileMetadata) => (
                   <tr key={file.id}>
                     <td>{file.name}</td>
-                    <td>{file.size}</td>
+                    <td>{formatFileSize(file.size)}</td>
                     <td>{file.uploadedBy}</td>
                     <td style={{display: 'flex', justifyContent: 'space-between'}}>
                       <a

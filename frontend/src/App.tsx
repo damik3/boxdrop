@@ -13,12 +13,15 @@ function App() {
     const [busy, setBusy] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [user, setUser] = useState<User | null>(null)
+    const [authLoading, setAuthLoading] = useState<boolean>(() => Boolean(authState))
 
     useEffect(() => {
         if (!authState) {
+            setAuthLoading(false)
             setUser(null)
             return
         }
+        setAuthLoading(true)
         getUser(authState)
             .then(user => {
                 if (user) {
@@ -33,10 +36,24 @@ function App() {
                 logout()
                 console.error(ex)
             })
+            .finally(() => {
+                setAuthLoading(false)
+            })
     }, [authState])
 
     if (authState && user) {
         return <AuthenticatedApp authState={authState} onLogout={logout}/>
+    }
+
+    if (authLoading) {
+        return (
+            <main className="app-shell loading-layout">
+                <div className="loading-card" role="status" aria-live="polite">
+                    <div className="loading-spinner" aria-hidden="true"/>
+                    <p>Loading your account...</p>
+                </div>
+            </main>
+        )
     }
 
     async function handleSubmit(currentMode: AuthMode, values: { email: string; password: string }) {

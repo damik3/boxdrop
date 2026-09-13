@@ -13,6 +13,39 @@
   align-items: start;
 }
 
+.loading-layout {
+  display: grid;
+  place-items: center;
+}
+
+.loading-card {
+  display: grid;
+  place-items: center;
+  gap: 0.85rem;
+  padding: 2rem 2.25rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 1rem;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  color: #334155;
+  font-weight: 600;
+}
+
+.loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid #cbd5e1;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .hero {
   max-width: 48rem;
   text-align: left;

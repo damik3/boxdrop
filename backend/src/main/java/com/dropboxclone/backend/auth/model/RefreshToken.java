@@ -25,7 +25,10 @@ public class RefreshToken {
     private String tokenHash;
 
     private Instant createdAt;
+
+    @Indexed(expireAfter = "0s")
     private Instant expiresAt;
+
     private Instant revokedAt;
     private String replacedByTokenId;
 

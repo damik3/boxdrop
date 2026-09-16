@@ -34,12 +34,13 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"empty body")
             return
 
+        message = body.decode("utf-8")
         payload = urlencode(
             {
                 "Action": "SendMessage",
                 "Version": "2012-11-05",
                 "QueueUrl": QUEUE_URL,
-                "MessageBody": body.decode("utf-8"),
+                "MessageBody": message,
             }
         ).encode("utf-8")
 
@@ -49,16 +50,16 @@ class Handler(BaseHTTPRequestHandler):
             method="POST",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-
         try:
             with urlopen(request, timeout=10) as response:
                 response.read()
         except (URLError, HTTPError, TimeoutError) as error:
-            print(f"sqs-bridge: failed to send to SQS: {error}")
+            print(f"sqs-bridge: failed to send to SQS: {error}", flush=True)
             self.send_response(502)
             self.end_headers()
             return
 
+        print(f"sqs-bridge: forwarded message: {message}", flush=True)
         self.send_response(200)
         self.end_headers()
 

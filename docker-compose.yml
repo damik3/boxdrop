@@ -7,6 +7,27 @@ services:
     volumes:
       - mongodb_data:/data/db
 
+  elasticmq:
+    image: softwaremill/elasticmq-native:latest
+    container_name: dropbox-clone-elasticmq
+    ports:
+      - "9324:9324"
+    volumes:
+      - ./infra/elasticmq.conf:/opt/elasticmq.conf:ro
+
+  # MinIO has no native SQS target; this forwards webhook events onto ElasticMQ.
+  sqs-bridge:
+    image: python:3.12-alpine
+    container_name: dropbox-clone-sqs-bridge
+    command: ["python", "/app/sqs-bridge.py"]
+    environment:
+      SQS_ENDPOINT: http://elasticmq:9324
+      QUEUE_URL: http://elasticmq:9324/000000000000/s3-object-created
+    volumes:
+      - ./infra/sqs-bridge.py:/app/sqs-bridge.py:ro
+    depends_on:
+      - elasticmq
+
   minio:
     image: minio/minio:latest
     container_name: dropbox-clone-minio
@@ -14,11 +35,29 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_NOTIFY_WEBHOOK_ENABLE_1: "on"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_1: http://sqs-bridge:8080/
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
       - minio_data:/data
+    depends_on:
+      - sqs-bridge
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: dropbox-clone-minio-init
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_BUCKET: ${APP_STORAGE_BUCKET:-dropbox-clone}
+    volumes:
+      - ./infra/minio-init.sh:/init.sh:ro
+    depends_on:
+      - minio
+    restart: "no"
 
   backend:
     build:

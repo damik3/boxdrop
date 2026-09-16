@@ -3,7 +3,6 @@ package com.dropboxclone.backend.file.controller;
 
 import com.dropboxclone.backend.auth.security.AuthenticatedUser;
 import com.dropboxclone.backend.file.request.GetPresignedUrlRequest;
-import com.dropboxclone.backend.file.request.MarkUploadCompletedRequest;
 import com.dropboxclone.backend.file.response.DownloadFileResponse;
 import com.dropboxclone.backend.file.response.GetFilesResponse;
 import com.dropboxclone.backend.file.response.GetPresignedUrlResponse;
@@ -36,7 +35,8 @@ public class FileController {
                                 fileMetadata.getSize(),
                                 fileMetadata.getMimeType(),
                                 fileMetadata.getUploadedByUserId(),
-                                null
+                                null,
+                                fileMetadata.getStatus().toString()
                         )
                 )
                 .toList();
@@ -46,12 +46,6 @@ public class FileController {
     public GetPresignedUrlResponse getPresignedUrl(Authentication authentication, @RequestBody GetPresignedUrlRequest request) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
         return fileService.getPresignedUrlForUpload(user.id(), request);
-    }
-
-    @PostMapping("/upload/mark-upload-completed")
-    public void markUploadCompleted(Authentication authentication, @RequestBody MarkUploadCompletedRequest request) {
-        var user = (AuthenticatedUser) authentication.getPrincipal();
-        fileService.markUploadCompleted(user.id(), request.fileId());
     }
 
     @GetMapping("/download/{fileId}")

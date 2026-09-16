@@ -12,6 +12,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 
 import java.time.Duration;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 @Service
@@ -28,9 +29,10 @@ public class FileService {
     }
 
     public List<FileMetadata> getFiles(String userId) {
+        List<FileUploadStatus> statusesToBeReturned = List.of(FileUploadStatus.COMPLETED, FileUploadStatus.PENDING);
         return fileMetadataRepository.findAllByUploadedByUserId(userId)
                 .stream()
-                .filter(fileMetadata -> fileMetadata.getStatus() == FileUploadStatus.COMPLETED)
+                .filter(fileMetadata -> statusesToBeReturned.contains(fileMetadata.getStatus()))
                 .toList();
     }
 
@@ -66,27 +68,6 @@ public class FileService {
         }
     }
 
-    public void markUploadCompleted(String userId, String fileId) {
-        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
-
-        if (!fileMetadata.getUploadedByUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is not owner of file");
-        }
-
-        if (fileMetadata.getStatus() == FileUploadStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "File is already uploaded");
-        }
-
-        String key = fileMetadata.getStorageKey();
-        if (key == null || !s3Service.objectExists(key)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded object not found in storage");
-        }
-
-        fileMetadata.setStatus(FileUploadStatus.COMPLETED);
-        fileMetadataRepository.save(fileMetadata);
-    }
-
     public String getDownloadLink(String userId, String fileId) {
         FileMetadata file = fileMetadataRepository.findById(fileId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
@@ -97,6 +78,11 @@ public class FileService {
 
         if (file.getStorageKey() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing storage key");
+        }
+
+
+        if (file.getStatus() != FileUploadStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File not uploaded");
         }
 
         return s3Service.presignGet(file.getStorageKey(), Duration.ofMinutes(10)).url().toString();
@@ -115,9 +101,24 @@ public class FileService {
         }
 
         s3Service.deleteObject(file.getStorageKey());
-        
+
         fileMetadataRepository.delete(file);
     }
 
+    public void completeByStorageKey(String storageKey) throws NoSuchElementException {
+        FileMetadata file = fileMetadataRepository.findByStorageKey(storageKey)
+                .orElse(null);
+        if (file == null) {
+            return; // unknown PUT — do not create metadata
+        }
+        if (file.getStatus() == FileUploadStatus.COMPLETED) {
+            return; // idempotent
+        }
+        if (!s3Service.objectExists(storageKey)) {
+            throw new NoSuchElementException("File %s not found".formatted(storageKey));
+        }
+        file.setStatus(FileUploadStatus.COMPLETED);
+        fileMetadataRepository.save(file);
+    }
 
 }

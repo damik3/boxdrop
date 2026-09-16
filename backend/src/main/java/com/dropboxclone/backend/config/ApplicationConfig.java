@@ -9,7 +9,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
-@EnableConfigurationProperties({StorageProperties.class, JwtProperties.class, RefreshTokenProperties.class})
+@EnableConfigurationProperties({StorageProperties.class, JwtProperties.class, RefreshTokenProperties.class, SqsProperties.class})
 public class ApplicationConfig {
 
     @Bean

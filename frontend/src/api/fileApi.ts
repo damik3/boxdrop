@@ -65,26 +65,6 @@ export async function uploadFile(url: string, file: File ): Promise<void> {
     }
 }
 
-export async function markUploadCompleted(authState: AuthState, fileId: string, onUnauthorized: () => void): Promise<void> {
-    const response = await authorizedFetch(
-        authState,
-        `${API_BASE_URL}/files/upload/mark-upload-completed`,
-        {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({fileId: fileId}),
-        },
-        onUnauthorized
-    )
-
-    if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'markUploadCompleted failed'))
-    }
-}
-
 export async function getDownloadUrl(authState: AuthState, fileId: string, onUnauthorized: () => void): Promise<GetDownloadUrlResponse> {
     const response = await authorizedFetch(
         authState,

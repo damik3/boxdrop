@@ -9,6 +9,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
 import java.net.URI;
 
@@ -49,6 +50,16 @@ public class AwsConfig {
                             .pathStyleAccessEnabled(true)
                             .build()
                 )
+                .build();
+    }
+
+    @Bean
+    SqsClient sqsClient(SqsProperties p) {
+        return SqsClient.builder()
+                .endpointOverride(URI.create(p.endpoint()))
+                .region(Region.of(p.region()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(p.accessKey(), p.secretKey())))
                 .build();
     }
 }

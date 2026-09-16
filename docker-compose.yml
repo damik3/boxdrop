@@ -66,6 +66,8 @@ services:
     depends_on:
       - mongodb
       - minio
+      - elasticmq
+      - sqs-bridge
     environment:
       SPRING_MONGODB_URI: ${SPRING_MONGODB_URI}
       APP_STORAGE_ENDPOINT: ${APP_STORAGE_ENDPOINT}
@@ -78,6 +80,10 @@ services:
       APP_AUTH_JWT_TTL: ${APP_AUTH_JWT_TTL}
       APP_AUTH_REFRESH_TTL_DAYS: ${APP_AUTH_REFRESH_TTL_DAYS}
       APP_FRONTEND_ORIGIN: ${APP_FRONTEND_ORIGIN}
+      APP_SQS_ENDPOINT: ${APP_SQS_ENDPOINT}
+      APP_SQS_QUEUE_URL: ${APP_SQS_QUEUE_URL}
+      APP_SQS_ACCESS_KEY: ${APP_SQS_ACCESS_KEY}
+      APP_SQS_SECRET_KEY: ${APP_SQS_SECRET_KEY}
     ports:
       - "8080:8080"
 

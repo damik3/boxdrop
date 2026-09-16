@@ -99,7 +99,6 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             closeUploadModal()
             await loadFiles()
             await pollUntilComplete(fileId)
-            await loadFiles()
         } catch (error) {
             setUploadErrorMessage(error instanceof Error ? error.message : 'File upload failed')
             setUploadingFile(false)
@@ -245,26 +244,32 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                                     <td>{file.status}</td>
                                     <td>{formatFileSize(file.size)}</td>
                                     <td>{file.uploadedBy}</td>
-                                    <td style={{display: 'flex', justifyContent: 'space-between'}}>
-                                        {file.status === 'COMPLETED' && (<a
-                                            href="#"
-                                            onClick={async (e) => {
-                                                e.preventDefault()
-                                                const {url} = await getDownloadUrl(authState, file.id, onLogout)
-                                                window.open(url, '_blank', 'noopener,noreferrer')
-                                            }}
-                                        >
-                                            Download
-                                        </a>)}
-                                        <a
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault()
-                                                void handleDeleteFile(file)
-                                            }}
-                                        >
-                                            Delete
-                                        </a>
+                                    <td>
+                                        <span style={{display: 'inline-flex', gap: '1rem', justifyContent: 'flex-end', minWidth: '9rem'}}>
+                                            {file.status === 'COMPLETED' ? (
+                                                <a
+                                                    href="#"
+                                                    onClick={async (e) => {
+                                                        e.preventDefault()
+                                                        const {url} = await getDownloadUrl(authState, file.id, onLogout)
+                                                        window.open(url, '_blank', 'noopener,noreferrer')
+                                                    }}
+                                                >
+                                                    Download
+                                                </a>
+                                            ) : (
+                                                <span style={{visibility: 'hidden'}}>Download</span>
+                                            )}
+                                            <a
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault()
+                                                    void handleDeleteFile(file)
+                                                }}
+                                            >
+                                                Delete
+                                            </a>
+                                        </span>
                                     </td>
                                 </tr>
                             ))}

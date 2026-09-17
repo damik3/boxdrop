@@ -3,38 +3,44 @@
 ## Project shape
 
 - `frontend/`: React + Vite UI for auth, file browsing, and upload flows.
-- `backend/`: Spring Boot API with JWT auth and health endpoints.
+- `backend/`: Spring Boot API with JWT auth, file metadata, and S3/SQS integration.
 - `design/design.md`: High-level product and system-design target for future iterations; read it before making architectural changes.
-- `docker-compose.yml`: Local stack wiring for app services and infrastructure.
+- `docker-compose.yml`: Local stack — MongoDB, MinIO, ElasticMQ, MinIO→SQS webhook bridge (`infra/`), and the backend. Frontend compose service is commented out.
 
 ## Current implementation status
 
-- Auth is working end-to-end in the UI against the backend JWT endpoints, including access-token refresh via an httpOnly refresh-token cookie.
-- The protected file area is wired up in the frontend for listing, uploading, downloading, and deleting files.
-- The backend exposes `/api/files` endpoints for listing, presigned upload URLs, upload completion, downloads, and deletes.
-- The backend file flow uses presigned upload URLs and a CDN-backed download link instead of a direct upload/download passthrough.
-- The backend also exposes `/api/user` for fetching the current authenticated user's profile (id, email); the frontend calls this on load via `frontend/src/api/userApi.ts`.
-- The design doc still reflects the broader system-design target; the implementation is now closer to that shape than before.
+- Auth works end-to-end, including access-token refresh via an httpOnly refresh-token cookie.
+- Protected UI supports listing, uploading, downloading, and deleting files.
+- File APIs (`/api/files`):
+  - `GET /` — list `PENDING` and `COMPLETED` files for the current user
+  - `POST /upload/presigned-url-for-upload` — create `PENDING` metadata, return `{ fileId, presignedUrl }`
+  - `GET /download/{fileId}` — return a short-lived presigned GET URL (not a CDN URL)
+  - `DELETE /{fileId}` — delete object + metadata
+- There is **no** client-facing upload-complete endpoint. Client PUTs to the presigned URL; MinIO notifies a webhook; `sqs-bridge` forwards to ElasticMQ; `S3ObjectCreatedListener` polls SQS and `FileService.completeByStorageKey` marks metadata `COMPLETED`.
+- After PUT, the UI reloads then polls `GET /api/files` until that file is `COMPLETED` (`AuthenticatedApp.pollUntilComplete`).
+- Uploads are validated server-side: max 50MB; `image/png`, `image/jpeg`, `application/pdf`.
+- Metadata lives in MongoDB (`file_metadata`) with `PENDING | COMPLETED | FAILED`.
+- `/api/user` returns `{ id, email }`; frontend loads it on auth via `frontend/src/api/userApi.ts`.
+- Sharing, sync, and 50GB files are still design-doc targets, not implemented.
 
 ## Frontend conventions
 
-- API base URL comes from `VITE_API_BASE_URL` and defaults to `http://localhost:8080/api`.
-- Auth state (`accessToken` plus `tokenType`) is persisted in local storage via `frontend/src/auth/authStorage.ts`; protected API calls send `Authorization: <tokenType> <accessToken>`.
-- The refresh token itself is never held in JS/localStorage — it lives in an httpOnly, secure cookie set by the backend (`/api/auth/login`, `/register`, `/refresh`) and is only usable via `/api/auth/refresh` and `/api/auth/logout`.
-- `frontend/src/api/httpClient.ts` centralizes authorized requests: on a `401`, it transparently calls `/api/auth/refresh` (de-duped via an in-flight promise), retries the original request once with the new access token, and clears auth state + calls `onUnauthorized` if refresh fails.
-- Match existing React patterns in `App.tsx`, `AuthenticatedApp.tsx`, and `frontend/src/auth/*`: local component state, explicit async error handling, and simple presentational CSS in `App.css`.
-- The authenticated shell currently owns file actions directly; keep API errors visible rather than silently mocking missing backend behavior.
+- API base URL: `VITE_API_BASE_URL`, default `http://localhost:8080/api`.
+- Persist `accessToken` + `tokenType` in local storage (`frontend/src/auth/authStorage.ts`); send `Authorization: <tokenType> <accessToken>`.
+- Refresh token is httpOnly, never in JS; cookie scoped to `/api/auth`.
+- `frontend/src/api/httpClient.ts`: on `401`, de-duped `/api/auth/refresh`, retry once, else clear auth + `onUnauthorized`.
+- File client: `frontend/src/api/fileApi.ts` — `requestUploadUrl`, direct `PUT` via `uploadFile`, `getDownloadUrl`, `deleteFile`.
+- Match `App.tsx`, `AuthenticatedApp.tsx`, `frontend/src/auth/*`: local state, visible API errors, CSS in `App.css`.
 
 ## Backend conventions
 
-- API routes are namespaced under `/api`.
-- Security is stateless JWT auth (`SecurityConfig`); only `/error`, `/actuator/health`, `/api/health`, `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, and `/api/auth/logout` are public — everything else (including `/api/user` and `/api/files/**`) requires a valid bearer access token.
-- Refresh tokens are managed server-side (`RefreshTokenService`, `RefreshTokenRepository`, `RefreshToken` entity) and delivered to the client only as an httpOnly `refresh_token` cookie scoped to `/api/auth`; `AuthController` handles register/login/refresh/logout and cookie lifecycle.
-- Keep file and user endpoints aligned with the protected frontend calls and the longer-term design in `design/design.md`.
+- Routes under `/api`. Public: `/error`, `/actuator/health`, `/api/health`, `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`. `/api/user` and `/api/files/**` need a bearer access token.
+- JWT is stateless (`SecurityConfig`). Refresh tokens are server-side (`RefreshTokenService` / Mongo) and set as httpOnly `refresh_token` by `AuthController`.
+- Storage: AWS S3 SDK against MinIO locally (`S3Service`, `StorageProperties`). SQS via `SqsProperties` + scheduled `S3ObjectCreatedListener`.
+- Keep contracts aligned with the frontend; read `design/design.md` before architectural changes.
 
 ## Working guidance for future agents
 
-- Read the design doc before making architectural changes; this repo is a learning project and intentionally incomplete.
-- Prefer surgical changes over broad scaffolding rewrites.
-- Do not silently mock around missing backend behavior unless the user explicitly asks for it.
-- If you change frontend or backend contracts, update both sides or clearly preserve failure visibility.
+- Learning project; intentionally incomplete. Prefer surgical changes.
+- Do not silently mock missing backend behavior unless asked.
+- If you change frontend or backend contracts, update both sides or keep failures visible.

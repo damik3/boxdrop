@@ -6,6 +6,8 @@ import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.Instant;
+
 @Getter
 @Setter
 @Builder(toBuilder = true)
@@ -25,4 +27,8 @@ public class FileMetadata {
     String storageKey;
 
     FileUploadStatus status;
+
+    Instant createdAt;
+
+    Instant updatedAt;
 }

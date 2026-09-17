@@ -8,9 +8,9 @@ import com.dropboxclone.backend.file.response.GetPresignedUrlResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -19,6 +19,8 @@ import java.util.Set;
 public class FileService {
     private static final long MAX_SIZE = 50L * 1024 * 1024; // 50MB
     private static final Set<String> ALLOWED_TYPES = Set.of("image/png", "image/jpeg", "application/pdf");
+    static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
+    static final Duration STALE_PENDING_TTL = Duration.ofMinutes(15);
 
     private final FileMetadataRepository fileMetadataRepository;
     private final S3Service s3Service;
@@ -29,7 +31,11 @@ public class FileService {
     }
 
     public List<FileMetadata> getFiles(String userId) {
-        List<FileUploadStatus> statusesToBeReturned = List.of(FileUploadStatus.COMPLETED, FileUploadStatus.PENDING);
+        List<FileUploadStatus> statusesToBeReturned = List.of(
+                FileUploadStatus.COMPLETED,
+                FileUploadStatus.PENDING,
+                FileUploadStatus.FAILED
+        );
         return fileMetadataRepository.findAllByUploadedByUserId(userId)
                 .stream()
                 .filter(fileMetadata -> statusesToBeReturned.contains(fileMetadata.getStatus()))
@@ -39,6 +45,7 @@ public class FileService {
     public GetPresignedUrlResponse getPresignedUrlForUpload(String userId, GetPresignedUrlRequest getPresignedUrlRequest) {
         validate(getPresignedUrlRequest);
 
+        Instant now = Instant.now();
         FileMetadata fileMetadata = fileMetadataRepository.save(
                 FileMetadata.builder()
                         .name(getPresignedUrlRequest.name())
@@ -46,6 +53,8 @@ public class FileService {
                         .mimeType(getPresignedUrlRequest.mimeType())
                         .uploadedByUserId(userId)
                         .status(FileUploadStatus.PENDING)
+                        .createdAt(now)
+                        .updatedAt(now)
                         .build()
         );
 
@@ -53,10 +62,10 @@ public class FileService {
         fileMetadata.setStorageKey(key);
         fileMetadataRepository.save(fileMetadata);
 
-        PresignedPutObjectRequest presignedPutObjectRequest =
-                s3Service.presignPut(key, fileMetadata.getMimeType(), Duration.ofMinutes(10));
-
-        return new GetPresignedUrlResponse(fileMetadata.getId(), presignedPutObjectRequest.url().toString());
+        return new GetPresignedUrlResponse(
+                fileMetadata.getId(),
+                s3Service.presignPutUrl(key, fileMetadata.getMimeType(), PRESIGN_TTL)
+        );
     }
 
     private void validate(GetPresignedUrlRequest req) {
@@ -85,7 +94,7 @@ public class FileService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File not uploaded");
         }
 
-        return s3Service.presignGet(file.getStorageKey(), Duration.ofMinutes(10)).url().toString();
+        return s3Service.presignGetUrl(file.getStorageKey(), PRESIGN_TTL);
     }
 
     public void deleteFile(String userId, String fileId) {
@@ -118,7 +127,22 @@ public class FileService {
             throw new NoSuchElementException("File %s not found".formatted(storageKey));
         }
         file.setStatus(FileUploadStatus.COMPLETED);
+        file.setUpdatedAt(Instant.now());
         fileMetadataRepository.save(file);
+    }
+
+    public void expireStalePendingUploads(Instant now) {
+        Instant cutoff = now.minus(STALE_PENDING_TTL);
+        List<FileMetadata> stale = fileMetadataRepository.findByStatusAndCreatedAtBefore(
+                FileUploadStatus.PENDING,
+                cutoff
+        );
+        for (FileMetadata file : stale) {
+            boolean objectExists = file.getStorageKey() != null && s3Service.objectExists(file.getStorageKey());
+            file.setStatus(objectExists ? FileUploadStatus.COMPLETED : FileUploadStatus.FAILED);
+            file.setUpdatedAt(now);
+            fileMetadataRepository.save(file);
+        }
     }
 
 }

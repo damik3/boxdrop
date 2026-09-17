@@ -51,18 +51,38 @@ export async function requestUploadUrl(authState: AuthState, file: File, onUnaut
     return await response.json() as Promise<UploadFileResponse>
 }
 
-export async function uploadFile(url: string, file: File ): Promise<void> {
-    const response = await fetch(
-        url,
-        {
-            method: 'PUT',
-            body: file
+export function uploadFile(
+    url: string,
+    file: File,
+    onProgress?: (percent: number) => void,
+): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', url)
+        if (file.type) {
+            xhr.setRequestHeader('Content-Type', file.type)
         }
-    )
 
-    if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'uploadFile failed'))
-    }
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable && onProgress) {
+                onProgress(Math.round((event.loaded / event.total) * 100))
+            }
+        }
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve()
+                return
+            }
+            reject(new Error(xhr.responseText || 'uploadFile failed'))
+        }
+
+        xhr.onerror = () => {
+            reject(new Error('uploadFile failed'))
+        }
+
+        xhr.send(file)
+    })
 }
 
 export async function getDownloadUrl(authState: AuthState, fileId: string, onUnauthorized: () => void): Promise<GetDownloadUrlResponse> {

@@ -6,6 +6,5 @@ public record GetFilesResponse(
         Integer size,
         String mimeType,
         String uploadedBy,
-        String url,
         String status
 ) {}

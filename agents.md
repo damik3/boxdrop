@@ -12,12 +12,13 @@
 - Auth works end-to-end, including access-token refresh via an httpOnly refresh-token cookie.
 - Protected UI supports listing, uploading, downloading, and deleting files.
 - File APIs (`/api/files`):
-  - `GET /` — list `PENDING` and `COMPLETED` files for the current user
+  - `GET /` — list `PENDING`, `COMPLETED`, and `FAILED` files for the current user (no download URL on the list DTO)
   - `POST /upload/presigned-url-for-upload` — create `PENDING` metadata, return `{ fileId, presignedUrl }`
   - `GET /download/{fileId}` — return a short-lived presigned GET URL (not a CDN URL)
   - `DELETE /{fileId}` — delete object + metadata
 - There is **no** client-facing upload-complete endpoint. Client PUTs to the presigned URL; MinIO notifies a webhook; `sqs-bridge` forwards to ElasticMQ; `S3ObjectCreatedListener` polls SQS and `FileService.completeByStorageKey` marks metadata `COMPLETED`.
-- After PUT, the UI reloads then polls `GET /api/files` until that file is `COMPLETED` (`AuthenticatedApp.pollUntilComplete`).
+- `PendingUploadSweeper` runs every 60s: `PENDING` older than 15 minutes with an S3 object → `COMPLETED` (missed SQS); otherwise → `FAILED`. Late SQS can still move `FAILED` → `COMPLETED`. Existing rows without `createdAt` are ignored.
+- After PUT, the UI shows upload progress, reloads, then polls `GET /api/files` until that file is `COMPLETED` or `FAILED` (`AuthenticatedApp.pollUntilComplete`).
 - Uploads are validated server-side: max 50MB; `image/png`, `image/jpeg`, `application/pdf`.
 - Metadata lives in MongoDB (`file_metadata`) with `PENDING | COMPLETED | FAILED`.
 - `/api/user` returns `{ id, email }`; frontend loads it on auth via `frontend/src/api/userApi.ts`.
@@ -36,7 +37,7 @@
 
 - Routes under `/api`. Public: `/error`, `/actuator/health`, `/api/health`, `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`. `/api/user` and `/api/files/**` need a bearer access token.
 - JWT is stateless (`SecurityConfig`). Refresh tokens are server-side (`RefreshTokenService` / Mongo) and set as httpOnly `refresh_token` by `AuthController`.
-- Storage: AWS S3 SDK against MinIO locally (`S3Service`, `StorageProperties`). SQS via `SqsProperties` + scheduled `S3ObjectCreatedListener`.
+- Storage: AWS S3 SDK against MinIO locally (`S3Service`, `StorageProperties`). SQS via `SqsProperties` + scheduled `S3ObjectCreatedListener`. Stale pending uploads via `PendingUploadSweeper`.
 - Keep contracts aligned with the frontend; read `design/design.md` before architectural changes.
 
 ## Working guidance for future agents

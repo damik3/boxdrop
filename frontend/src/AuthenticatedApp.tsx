@@ -38,6 +38,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
     const [uploadErrorMessage, setUploadErrorMessage] = React.useState<string | null>(null)
     const [loadingFiles, setLoadingFiles] = React.useState(true)
     const [uploadingFile, setUploadingFile] = React.useState(false)
+    const [uploadProgress, setUploadProgress] = React.useState<number | null>(null)
     const fileRef = React.useRef<HTMLInputElement | null>(null)
 
     const loadFiles = React.useCallback(async () => {
@@ -61,6 +62,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
     const closeUploadModal = (): void => {
         setIsModalOpen(false)
         setUploadingFile(false)
+        setUploadProgress(null)
         setUploadErrorMessage(null)
         setFileInputState({file: null})
         if (fileRef.current) {
@@ -69,18 +71,16 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
     }
 
     const pollUntilComplete = async (fileId: string, intervalMs: number = 2000) => {
-        let files
-        let i = 0
         const maxTries = 15
-        let found = false
-        do {
+        for (let i = 0; i < maxTries; i++) {
             await new Promise(resolve => setTimeout(resolve, intervalMs))
-            files = await getFiles(authState, onLogout)
-            found = files.find(file => file.id === fileId)?.status === 'COMPLETED'
-            i++
-        } while (!found && i < maxTries)
-        if (found)
-            setFiles(files)
+            const latest = await getFiles(authState, onLogout)
+            setFiles(latest)
+            const status = latest.find(file => file.id === fileId)?.status
+            if (status === 'COMPLETED' || status === 'FAILED') {
+                return
+            }
+        }
     }
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -91,17 +91,19 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         }
 
         setUploadingFile(true)
+        setUploadProgress(0)
         setUploadErrorMessage(null)
 
         try {
             const {fileId, presignedUrl} = await requestUploadUrl(authState, fileInputState.file, onLogout)
-            await uploadFile(presignedUrl, fileInputState.file)
+            await uploadFile(presignedUrl, fileInputState.file, setUploadProgress)
             closeUploadModal()
             await loadFiles()
             await pollUntilComplete(fileId)
         } catch (error) {
             setUploadErrorMessage(error instanceof Error ? error.message : 'File upload failed')
             setUploadingFile(false)
+            setUploadProgress(null)
         }
     }
 
@@ -188,6 +190,15 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                                 <div className="file-status">
                                     <span className="file-status__label">Selected</span>
                                     <strong>{fileInputState.file.name}</strong>
+                                </div>
+                            ) : null}
+
+                            {uploadingFile && uploadProgress !== null ? (
+                                <div className="upload-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
+                                    <div className="upload-progress__track">
+                                        <div className="upload-progress__bar" style={{width: `${uploadProgress}%`}} />
+                                    </div>
+                                    <span className="upload-progress__label">{uploadProgress}%</span>
                                 </div>
                             ) : null}
 

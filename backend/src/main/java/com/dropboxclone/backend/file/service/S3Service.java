@@ -40,6 +40,10 @@ public class S3Service {
         return s3Presigner.presignPutObject(putObjectPresignRequest);
     }
 
+    public String presignPutUrl(String key, String contentType, Duration ttl) {
+        return presignPut(key, contentType, ttl).url().toString();
+    }
+
     public PresignedGetObjectRequest presignGet(String key, Duration ttl) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(storageProperties.bucket())
@@ -52,6 +56,10 @@ public class S3Service {
                 .build();
 
         return s3Presigner.presignGetObject(getObjectPresignRequest);
+    }
+
+    public String presignGetUrl(String key, Duration ttl) {
+        return presignGet(key, ttl).url().toString();
     }
 
     public boolean objectExists(String key) {

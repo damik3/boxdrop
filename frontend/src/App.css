@@ -404,6 +404,34 @@
   white-space: nowrap;
 }
 
+.upload-progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.upload-progress__track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.upload-progress__bar {
+  height: 100%;
+  background: #2563eb;
+  transition: width 0.15s ease;
+}
+
+.upload-progress__label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #334155;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
 .modal__actions {
   display: flex;
   justify-content: flex-end;

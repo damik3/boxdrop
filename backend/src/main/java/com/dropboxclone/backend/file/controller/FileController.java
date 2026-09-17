@@ -35,7 +35,6 @@ public class FileController {
                                 fileMetadata.getSize(),
                                 fileMetadata.getMimeType(),
                                 fileMetadata.getUploadedByUserId(),
-                                null,
                                 fileMetadata.getStatus().toString()
                         )
                 )

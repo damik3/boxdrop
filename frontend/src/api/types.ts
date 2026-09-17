@@ -4,7 +4,6 @@ export interface FileMetadata {
     size: number
     mimeType: string
     uploadedBy: string
-    url: string
     status: 'PENDING' | 'COMPLETED' | 'FAILED'
 }
 

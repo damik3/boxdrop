@@ -1,5 +1,5 @@
 import type {AuthState} from '../auth/types.ts'
-import type {FileMetadata, GetDownloadUrlResponse, UploadFileResponse} from './types.ts'
+import type {FileMetadata, FileShare, GetDownloadUrlResponse, UploadFileResponse} from './types.ts'
 import {parseErrorMessage} from "./common.ts";
 import {authorizedFetch} from "./httpClient.ts";
 
@@ -120,5 +120,99 @@ export async function deleteFile(authState: AuthState, fileId: string, onUnautho
 
     if (!response.ok) {
         throw new Error(await parseErrorMessage(response, 'deleteFile failed'))
+    }
+}
+
+export async function getSharedFiles(authState: AuthState, onUnauthorized: () => void): Promise<FileMetadata[]> {
+    const response = await authorizedFetch(
+        authState,
+        `${API_BASE_URL}/files/shared`,
+        {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        },
+        onUnauthorized
+    )
+
+    if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Failed to load shared files'))
+    }
+
+    return await response.json() as Promise<FileMetadata[]>
+}
+
+export async function getFileShares(
+    authState: AuthState,
+    fileId: string,
+    onUnauthorized: () => void,
+): Promise<FileShare[]> {
+    const response = await authorizedFetch(
+        authState,
+        `${API_BASE_URL}/files/${fileId}/shares`,
+        {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        },
+        onUnauthorized
+    )
+
+    if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Failed to load shares'))
+    }
+
+    return await response.json() as Promise<FileShare[]>
+}
+
+export async function shareFile(
+    authState: AuthState,
+    fileId: string,
+    email: string,
+    onUnauthorized: () => void,
+): Promise<void> {
+    const response = await authorizedFetch(
+        authState,
+        `${API_BASE_URL}/files/${fileId}/share`,
+        {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({email}),
+        },
+        onUnauthorized
+    )
+
+    if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Failed to share file'))
+    }
+}
+
+export async function unshareFile(
+    authState: AuthState,
+    fileId: string,
+    email: string,
+    onUnauthorized: () => void,
+): Promise<void> {
+    const response = await authorizedFetch(
+        authState,
+        `${API_BASE_URL}/files/${fileId}/share`,
+        {
+            method: 'DELETE',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({email}),
+        },
+        onUnauthorized
+    )
+
+    if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Failed to remove share'))
     }
 }

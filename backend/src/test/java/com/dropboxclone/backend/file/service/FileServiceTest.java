@@ -14,12 +14,16 @@ import static org.mockito.Mockito.when;
 import com.dropboxclone.backend.file.model.FileMetadata;
 import com.dropboxclone.backend.file.model.FileUploadStatus;
 import com.dropboxclone.backend.file.repository.FileMetadataRepository;
+import com.dropboxclone.backend.file.repository.SharedFileRepository;
 import com.dropboxclone.backend.file.request.GetPresignedUrlRequest;
 import com.dropboxclone.backend.file.response.GetPresignedUrlResponse;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.dropboxclone.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,8 +38,10 @@ class FileServiceTest {
     private static final String STORAGE_KEY = "users/user-1/file-1-photo.png";
 
     private final FileMetadataRepository repository = mock(FileMetadataRepository.class);
+    private final SharedFileRepository sharedFileRepository = mock(SharedFileRepository.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
     private final S3Service s3Service = mock(S3Service.class);
-    private final FileService fileService = new FileService(repository, s3Service);
+    private final FileService fileService = new FileService(repository, s3Service, sharedFileRepository, userRepository);
     private final AtomicInteger idSequence = new AtomicInteger();
 
     @BeforeEach

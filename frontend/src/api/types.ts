@@ -16,6 +16,11 @@ export interface GetDownloadUrlResponse {
     url: string
 }
 
+export interface FileShare {
+    userId: string
+    email: string
+}
+
 export interface User {
     id: string
     email: string

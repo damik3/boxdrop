@@ -23,7 +23,7 @@ export async function getUser(authState: AuthState, onUnauthorized: () => void) 
     }
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'Failed to load user'))
+        throw new Error(await parseErrorMessage(response, 'Could not load your account.'))
     }
 
     return await response.json() as Promise<User>

@@ -18,7 +18,7 @@ export async function getFiles(authState: AuthState, onUnauthorized: () => void)
     }
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'Failed to load files'))
+        throw new Error(await parseErrorMessage(response, 'Could not load your files.'))
     }
 
     return await response.json() as Promise<FileMetadata[]>
@@ -45,7 +45,7 @@ export async function requestUploadUrl(authState: AuthState, file: File, onUnaut
     )
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'File upload failed'))
+        throw new Error(await parseErrorMessage(response, 'Could not start the upload.'))
     }
 
     return await response.json() as Promise<UploadFileResponse>
@@ -74,11 +74,11 @@ export function uploadFile(
                 resolve()
                 return
             }
-            reject(new Error(xhr.responseText || 'uploadFile failed'))
+            reject(new Error('Could not upload this file. Try again.'))
         }
 
         xhr.onerror = () => {
-            reject(new Error('uploadFile failed'))
+            reject(new Error('Could not upload this file. Try again.'))
         }
 
         xhr.send(file)
@@ -99,7 +99,7 @@ export async function getDownloadUrl(authState: AuthState, fileId: string, onUna
     )
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'getDownloadUrl failed'))
+        throw new Error(await parseErrorMessage(response, 'Could not download this file.'))
     }
 
     return await response.json() as Promise<GetDownloadUrlResponse>
@@ -119,7 +119,7 @@ export async function deleteFile(authState: AuthState, fileId: string, onUnautho
     )
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'deleteFile failed'))
+        throw new Error(await parseErrorMessage(response, 'Could not delete this file.'))
     }
 }
 
@@ -137,7 +137,7 @@ export async function getSharedFiles(authState: AuthState, onUnauthorized: () =>
     )
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'Failed to load shared files'))
+        throw new Error(await parseErrorMessage(response, 'Could not load shared files.'))
     }
 
     return await response.json() as Promise<FileMetadata[]>
@@ -161,7 +161,7 @@ export async function getFileShares(
     )
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'Failed to load shares'))
+        throw new Error(await parseErrorMessage(response, 'Could not load who this file is shared with.'))
     }
 
     return await response.json() as Promise<FileShare[]>
@@ -188,7 +188,7 @@ export async function shareFile(
     )
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'Failed to share file'))
+        throw new Error(await parseErrorMessage(response, 'Could not share this file.'))
     }
 }
 
@@ -213,6 +213,6 @@ export async function unshareFile(
     )
 
     if (!response.ok) {
-        throw new Error(await parseErrorMessage(response, 'Failed to remove share'))
+        throw new Error(await parseErrorMessage(response, 'Could not remove access.'))
     }
 }

@@ -1,6 +1,7 @@
 import type { AuthState } from '../auth/types'
 import { refreshAccessToken } from '../auth/authApi'
 import { clearAuthState, writeAuthState } from '../auth/authStorage'
+import { GENERIC_ERROR_MESSAGE } from './common'
 
 type Unauthorized = () => void
 
@@ -35,17 +36,24 @@ export async function authorizedFetch(
         },
     })
 
-    let response = await fetch(input, withAuthHeader(authState))
+    try {
+        let response = await fetch(input, withAuthHeader(authState))
 
-    if (response.status === 401) {
-        const refreshed = await refreshOnce()
-        if (!refreshed) {
-            clearAuthState()
-            onUnauthorized()
-            return response
+        if (response.status === 401) {
+            const refreshed = await refreshOnce()
+            if (!refreshed) {
+                clearAuthState()
+                onUnauthorized()
+                return response
+            }
+            response = await fetch(input, withAuthHeader(refreshed))
         }
-        response = await fetch(input, withAuthHeader(refreshed))
-    }
 
-    return response
+        return response
+    } catch (error) {
+        if (error instanceof TypeError) {
+            throw new Error(GENERIC_ERROR_MESSAGE)
+        }
+        throw error
+    }
 }

@@ -1,10 +1,9 @@
 package com.dropboxclone.backend.user.service;
 
+import com.dropboxclone.backend.common.ApiError;
 import com.dropboxclone.backend.user.model.User;
 import com.dropboxclone.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
-
-import java.util.NoSuchElementException;
 
 @Service
 public class UserService {
@@ -18,6 +17,6 @@ public class UserService {
     public User getUser(String userId) {
         return userRepository
                 .findById(userId)
-                .orElseThrow(() -> new NoSuchElementException("User not found"));
+                .orElseThrow(ApiError.ACCOUNT_NOT_FOUND::exception);
     }
 }

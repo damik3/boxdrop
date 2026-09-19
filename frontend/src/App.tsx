@@ -5,6 +5,7 @@ import {AuthForm} from './auth/AuthForm'
 import {useAuth} from './auth/useAuth'
 import type {AuthMode} from './auth/types'
 import {getUser} from "./api/userApi.ts";
+import {GENERIC_ERROR_MESSAGE} from "./api/common.ts";
 import type {User} from "./api/types.ts";
 
 function App() {
@@ -63,7 +64,7 @@ function App() {
         try {
             await authenticate(currentMode, values)
         } catch (error) {
-            setErrorMessage(error instanceof Error ? error.message : 'Authentication failed')
+            setErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         } finally {
             setBusy(false)
         }

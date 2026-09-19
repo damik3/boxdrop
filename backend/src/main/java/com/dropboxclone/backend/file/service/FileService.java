@@ -1,5 +1,6 @@
 package com.dropboxclone.backend.file.service;
 
+import com.dropboxclone.backend.common.ApiError;
 import com.dropboxclone.backend.file.model.FileMetadata;
 import com.dropboxclone.backend.file.model.FileUploadStatus;
 import com.dropboxclone.backend.file.model.SharedFile;
@@ -9,9 +10,7 @@ import com.dropboxclone.backend.file.request.GetPresignedUrlRequest;
 import com.dropboxclone.backend.file.response.GetPresignedUrlResponse;
 import com.dropboxclone.backend.user.model.User;
 import com.dropboxclone.backend.user.repository.UserRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -78,31 +77,31 @@ public class FileService {
 
     private void validate(GetPresignedUrlRequest req) {
         if (req.size() <= 0 || req.size() > MAX_SIZE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file size");
+            throw ApiError.INVALID_FILE_SIZE.exception();
         }
         if (!ALLOWED_TYPES.contains(req.mimeType())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported content type");
+            throw ApiError.UNSUPPORTED_CONTENT_TYPE.exception();
         }
     }
 
     public String getDownloadLink(String userId, String fileId) {
         FileMetadata file = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
+                .orElseThrow(ApiError.FILE_NOT_FOUND::exception);
 
         boolean fileUploadedByUser = file.getUploadedByUserId().equals(userId);
         boolean fileSharedWithUser = sharedFileRepository.findByUserIdAndFileId(userId, fileId).isPresent();
 
         if (!fileUploadedByUser && !fileSharedWithUser) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+            throw ApiError.NOT_ALLOWED.exception();
         }
 
         if (file.getStorageKey() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing storage key");
+            throw ApiError.MISSING_STORAGE_KEY.exception();
         }
 
 
         if (file.getStatus() != FileUploadStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File not uploaded");
+            throw ApiError.FILE_NOT_UPLOADED.exception();
         }
 
         return s3Service.presignGetUrl(file.getStorageKey(), PRESIGN_TTL);
@@ -110,14 +109,14 @@ public class FileService {
 
     public void deleteFile(String userId, String fileId) {
         FileMetadata file = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
+                .orElseThrow(ApiError.FILE_NOT_FOUND::exception);
 
         if (!file.getUploadedByUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+            throw ApiError.NOT_ALLOWED.exception();
         }
 
         if (file.getStorageKey() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing storage key");
+            throw ApiError.MISSING_STORAGE_KEY.exception();
         }
 
         s3Service.deleteObject(file.getStorageKey());
@@ -162,10 +161,14 @@ public class FileService {
                 .stream()
                 .map(SharedFile::getFileId)
                 .toList();
-        return fileMetadataRepository.findAllById(sharedFileIds);
+        return fileMetadataRepository.findAllById(sharedFileIds)
+                .stream()
+                .filter(file -> file.getStatus() == FileUploadStatus.COMPLETED)
+                .toList();
     }
 
     public List<User> getFileShares(String userId, String fileId) {
+        requireOwnedFile(userId, fileId);
         List<String> userIds = sharedFileRepository
                 .findByFileIdAndSharedByUserId(fileId, userId)
                 .stream()
@@ -175,36 +178,50 @@ public class FileService {
     }
 
     public void shareFile(String sharedByUserId, String fileId, String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NoSuchElementException("User not found: " + email));
-        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new NoSuchElementException("File not found: " + fileId));
-        if (!fileMetadata.getUploadedByUserId().equals(sharedByUserId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+        User recipient = findUserByEmail(email);
+        FileMetadata file = requireOwnedFile(sharedByUserId, fileId);
+        if (recipient.getId().equals(sharedByUserId)) {
+            throw ApiError.CANNOT_SHARE_WITH_SELF.exception();
         }
-        if (fileMetadata.getStatus() != FileUploadStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File not uploaded");
+        if (file.getStatus() != FileUploadStatus.COMPLETED) {
+            throw ApiError.FILE_NOT_UPLOADED.exception();
+        }
+        if (sharedFileRepository.findByUserIdAndFileId(recipient.getId(), fileId).isPresent()) {
+            return;
         }
         sharedFileRepository.save(
                 SharedFile
                         .builder()
                         .sharedByUserId(sharedByUserId)
                         .fileId(fileId)
-                        .userId(user.getId())
+                        .userId(recipient.getId())
                         .createdAt(Instant.now())
                         .build()
         );
     }
 
     public void unshareFile(String sharedByUserId, String fileId, String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new NoSuchElementException("User not found: " + email));
-        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new NoSuchElementException("File not found: " + fileId));
-        if (!fileMetadata.getUploadedByUserId().equals(sharedByUserId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+        User recipient = findUserByEmail(email);
+        requireOwnedFile(sharedByUserId, fileId);
+        sharedFileRepository.deleteByUserIdAndFileId(recipient.getId(), fileId);
+    }
+
+    private User findUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw ApiError.EMAIL_REQUIRED.exception();
         }
-        sharedFileRepository.deleteByUserIdAndFileId(user.getId(), fileId);
+        String normalizedEmail = email.trim().toLowerCase();
+        return userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(ApiError.USER_NOT_FOUND::exception);
+    }
+
+    private FileMetadata requireOwnedFile(String userId, String fileId) {
+        FileMetadata file = fileMetadataRepository.findById(fileId)
+                .orElseThrow(ApiError.FILE_NOT_FOUND::exception);
+        if (!file.getUploadedByUserId().equals(userId)) {
+            throw ApiError.NOT_ALLOWED.exception();
+        }
+        return file;
     }
 
 }

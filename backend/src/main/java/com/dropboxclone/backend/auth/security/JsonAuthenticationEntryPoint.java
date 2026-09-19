@@ -1,5 +1,6 @@
 package com.dropboxclone.backend.auth.security;
 
+import com.dropboxclone.backend.common.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -19,7 +20,11 @@ public class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setContentType("application/json");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setCharacterEncoding("UTF-8");
-        String message = authException.getMessage() != null ? authException.getMessage() : "Unauthorized";
-        response.getWriter().write("{\"error\":\"" + message.replace("\"", "'") + "\"}");
+        response.getWriter().write(
+                "{\"code\":\"%s\",\"message\":\"%s\"}".formatted(
+                        ApiError.UNAUTHORIZED.code(),
+                        ApiError.UNAUTHORIZED.message()
+                )
+        );
     }
 }

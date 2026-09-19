@@ -1,17 +1,8 @@
 import type {AuthState} from './auth/types.ts'
 import {useEffect} from 'react'
 import * as React from 'react'
-import {
-    deleteFile,
-    getDownloadUrl,
-    getFileShares,
-    getFiles,
-    getSharedFiles,
-    requestUploadUrl,
-    shareFile,
-    unshareFile,
-    uploadFile,
-} from './api/fileApi.ts'
+import {deleteFile, getDownloadUrl, getFileShares, getFiles, getSharedFiles, requestUploadUrl, shareFile, unshareFile, uploadFile} from './api/fileApi.ts'
+import {GENERIC_ERROR_MESSAGE} from './api/common.ts'
 import type {FileMetadata, FileShare} from './api/types.ts'
 
 interface AuthenticatedAppProps {
@@ -75,7 +66,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             setFiles(ownedResult.value)
         } else {
             setLoadErrorMessage(
-                ownedResult.reason instanceof Error ? ownedResult.reason.message : 'Failed to load files',
+                ownedResult.reason instanceof Error ? ownedResult.reason.message : GENERIC_ERROR_MESSAGE,
             )
         }
         setLoadingFiles(false)
@@ -84,7 +75,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             setSharedFiles(sharedResult.value)
         } else {
             setSharedLoadErrorMessage(
-                sharedResult.reason instanceof Error ? sharedResult.reason.message : 'Failed to load shared files',
+                sharedResult.reason instanceof Error ? sharedResult.reason.message : GENERIC_ERROR_MESSAGE,
             )
         }
         setLoadingSharedFiles(false)
@@ -136,7 +127,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             await loadFiles()
             await pollUntilComplete(fileId)
         } catch (error) {
-            setUploadErrorMessage(error instanceof Error ? error.message : 'File upload failed')
+            setUploadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
             setUploadingFile(false)
             setUploadProgress(null)
         }
@@ -158,7 +149,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             await deleteFile(authState, file.id, onLogout)
             await loadFiles()
         } catch (error) {
-            setLoadErrorMessage(error instanceof Error ? error.message : 'Failed to delete file')
+            setLoadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         }
     }
 
@@ -167,7 +158,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             const {url} = await getDownloadUrl(authState, file.id, onLogout)
             window.open(url, '_blank', 'noopener,noreferrer')
         } catch (error) {
-            setLoadErrorMessage(error instanceof Error ? error.message : 'Failed to download file')
+            setLoadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         }
     }
 
@@ -180,7 +171,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             setShares(result)
         } catch (error) {
             setShares([])
-            setShareErrorMessage(error instanceof Error ? error.message : 'Failed to load shares')
+            setShareErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         } finally {
             setLoadingShares(false)
         }
@@ -222,7 +213,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             setShareEmail('')
             await loadShares(fileToShare.id)
         } catch (error) {
-            setShareErrorMessage(error instanceof Error ? error.message : 'Failed to share file')
+            setShareErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         } finally {
             setSharingFile(false)
         }
@@ -244,7 +235,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             await unshareFile(authState, fileToShare.id, email, onLogout)
             await loadShares(fileToShare.id)
         } catch (error) {
-            setShareErrorMessage(error instanceof Error ? error.message : 'Failed to remove share')
+            setShareErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         }
     }
 

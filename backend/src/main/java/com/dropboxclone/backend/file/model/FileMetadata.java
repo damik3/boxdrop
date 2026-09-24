@@ -7,6 +7,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.List;
 
 @Getter
 @Setter
@@ -31,4 +32,10 @@ public class FileMetadata {
     Instant createdAt;
 
     Instant updatedAt;
+
+    String fingerprint;
+
+    List<FileChunk> fileChunks;
+
+    String s3UploadId;
 }

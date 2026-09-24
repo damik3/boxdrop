@@ -1,7 +1,19 @@
 import type {AuthState} from './auth/types.ts'
 import {useEffect} from 'react'
 import * as React from 'react'
-import {deleteFile, getDownloadUrl, getFileShares, getFiles, getSharedFiles, requestUploadUrl, shareFile, unshareFile, uploadFile} from './api/fileApi.ts'
+import {
+    deleteFile,
+    getDownloadUrl,
+    getFileShares,
+    getFiles,
+    getSharedFiles,
+    requestUploadUrl,
+    shareFile,
+    unshareFile,
+    uploadFile,
+    fileExists, initiateMultipartUpload, getPresignedUrlForMultipartUpload, uploadPart, patchMultipartUpload,
+    completeMultipartUpload
+} from './api/fileApi.ts'
 import {GENERIC_ERROR_MESSAGE} from './api/common.ts'
 import type {FileMetadata, FileShare} from './api/types.ts'
 
@@ -30,6 +42,8 @@ function formatFileSize(sizeInBytes: number): string {
 
     return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`
 }
+
+const multipart_chunksize = 10 * 1024 * 1024; // 10MB
 
 export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
     const [isUploadModalOpen, setIsUploadModalOpen] = React.useState(false)
@@ -109,6 +123,12 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         }
     }
 
+    function toHex(buffer: ArrayBuffer): string {
+        return [...new Uint8Array(buffer)]
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('')
+    }
+
     const handleSubmitUpload = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
         event.preventDefault()
 
@@ -120,12 +140,51 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         setUploadProgress(0)
         setUploadErrorMessage(null)
 
+        const file = fileInputState.file
+
         try {
-            const {fileId, presignedUrl} = await requestUploadUrl(authState, fileInputState.file, onLogout)
-            await uploadFile(presignedUrl, fileInputState.file, setUploadProgress)
-            closeUploadModal()
-            await loadFiles()
-            await pollUntilComplete(fileId)
+            if (file.size > multipart_chunksize) {
+                // Handle multipart upload
+                const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+                const {exists, status} = await fileExists(authState, file.name, toHex(fingerprint), onLogout)
+                if (!exists) {
+                    // Upload from scratch flow
+                    const numChunks = Math.ceil(file.size / multipart_chunksize)
+                    const initiateMultipartUploadResponse = await initiateMultipartUpload(authState, file.name, toHex(fingerprint), file.size, file.type, numChunks, onLogout)
+                    const fileId = initiateMultipartUploadResponse.fileId
+                    const uploadId = initiateMultipartUploadResponse.uploadId
+
+                    const promises = Array.from({length: numChunks}, async (_, i) => {
+                        const partNumber = i + 1
+                        const slice = file.slice(i * multipart_chunksize, (i + 1) * multipart_chunksize)
+                        const {url} = await getPresignedUrlForMultipartUpload(authState, fileId, uploadId, partNumber, onLogout)
+                        const {etag} = await uploadPart(url, slice)
+                        const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await slice.arrayBuffer())
+                        await patchMultipartUpload(authState, fileId, uploadId, partNumber, toHex(fingerprint), etag, onLogout)
+                    })
+
+                    await Promise.all(promises)
+                    await completeMultipartUpload(authState, fileId, onLogout)
+
+                    closeUploadModal()
+                    await loadFiles()
+                    await pollUntilComplete(fileId)
+                } else if (status === 'COMPLETED') {
+                    throw new Error('File already exists')
+                }
+                else if (status === 'PENDING') {
+                    throw new Error('Resume not implemented')
+                }
+                else if (status === 'FAILED') {
+                    throw new Error('Upload failed')
+                }
+            } else {
+                const {fileId, presignedUrl} = await requestUploadUrl(authState, file, onLogout)
+                await uploadFile(presignedUrl, file, setUploadProgress)
+                closeUploadModal()
+                await loadFiles()
+                await pollUntilComplete(fileId)
+            }
         } catch (error) {
             setUploadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
             setUploadingFile(false)

@@ -13,7 +13,7 @@
 - Protected UI supports listing, uploading, downloading, deleting, and sharing files.
 - File APIs (`/api/files`):
   - `GET /` — list `PENDING`, `COMPLETED`, and `FAILED` files owned by the current user (no download URL on the list DTO)
-  - `POST /upload/presigned-url-for-upload` — create `PENDING` metadata, return `{ fileId, presignedUrl }`
+  - `POST /upload/presigned-url` — create `PENDING` metadata, return `{ fileId, presignedUrl }`
   - `GET /download/{fileId}` — return a short-lived presigned GET URL for the owner or a user the file was shared with (not a CDN URL)
   - `DELETE /{fileId}` — owner deletes object, `shared_file` rows, and metadata
   - `GET /shared` — `COMPLETED` files shared with the current user

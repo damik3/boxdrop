@@ -5,12 +5,11 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.*;
 
 import java.time.Duration;
+import java.util.Comparator;
+import java.util.List;
 
 @Service
 public class S3Service {
@@ -64,11 +63,7 @@ public class S3Service {
 
     public boolean objectExists(String key) {
         try {
-            s3Client.headObject(HeadObjectRequest.builder()
-                    .bucket(storageProperties.bucket())
-                    .key(key)
-                    .build()
-            );
+            s3Client.headObject(HeadObjectRequest.builder().bucket(storageProperties.bucket()).key(key).build());
             return true;
         } catch (NoSuchKeyException exception) {
             return false;
@@ -76,9 +71,49 @@ public class S3Service {
     }
 
     public void deleteObject(String key) {
-        s3Client.deleteObject(DeleteObjectRequest.builder()
+        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(storageProperties.bucket()).key(key).build());
+    }
+
+    public CreateMultipartUploadResponse multipartUpload(String key, String contentType) {
+        return s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
                 .bucket(storageProperties.bucket())
                 .key(key)
+                .contentType(contentType)
+                .build());
+    }
+
+    public String presignUploadPart(String key, String uploadId, Integer partNumber, Duration ttl) {
+        return s3Presigner.presignUploadPart(UploadPartPresignRequest.builder()
+                .signatureDuration(ttl)
+                .uploadPartRequest(UploadPartRequest.builder()
+                        .bucket(storageProperties.bucket())
+                        .key(key)
+                        .uploadId(uploadId)
+                        .partNumber(partNumber)
+                        .build())
+                .build()).url().toString();
+
+    }
+
+    public ListPartsResponse listParts(String key, String uploadId) {
+        return s3Client.listParts(ListPartsRequest.builder()
+                .bucket(storageProperties.bucket())
+                .key(key)
+                .uploadId(uploadId)
+                .build());
+    }
+
+    public void completeMultipartUpload(String key, String uploadId, List<Part> parts) {
+        s3Client.completeMultipartUpload(CompleteMultipartUploadRequest.builder()
+                .bucket(storageProperties.bucket())
+                .key(key)
+                .uploadId(uploadId)
+                .multipartUpload(CompletedMultipartUpload.builder()
+                        .parts(parts.stream()
+                                .sorted(Comparator.comparingInt(Part::partNumber))
+                                .map(p -> CompletedPart.builder().partNumber(p.partNumber()).eTag(p.eTag()).build())
+                                .toList())
+                        .build())
                 .build());
     }
 

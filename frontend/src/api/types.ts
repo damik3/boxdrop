@@ -25,3 +25,22 @@ export interface User {
     id: string
     email: string
 }
+
+export interface FileExistsResponse {
+    exists: boolean
+    fileId: string
+    status: string
+}
+
+export interface InitiateMultipartUploadResponse {
+    fileId: string
+    uploadId: string
+}
+
+export interface GetPresignedUrlForMultipartUploadResponse {
+    url: string
+}
+
+export interface UploadPartResponse {
+    etag: string
+}

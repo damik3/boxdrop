@@ -121,7 +121,6 @@ public class FileController {
         var user = (AuthenticatedUser) authentication.getPrincipal();
         return new GetPresignedUrlMultipartResponse(fileService.presignUploadPart(user.id(),
                 request.fileId(),
-                request.uploadId(),
                 request.partNumber()));
     }
 
@@ -130,7 +129,6 @@ public class FileController {
         var user = (AuthenticatedUser) authentication.getPrincipal();
         fileService.patchMultipartUpload(user.id(),
                 request.fileId(),
-                request.uploadId(),
                 request.partNumber(),
                 request.fingerprint(),
                 request.etag());

@@ -21,11 +21,6 @@ export interface FileShare {
     email: string
 }
 
-export interface User {
-    id: string
-    email: string
-}
-
 export interface FileExistsResponse {
     exists: boolean
     fileId: string
@@ -34,7 +29,6 @@ export interface FileExistsResponse {
 
 export interface InitiateMultipartUploadResponse {
     fileId: string
-    uploadId: string
 }
 
 export interface GetPresignedUrlForMultipartUploadResponse {

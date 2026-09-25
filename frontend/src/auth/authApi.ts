@@ -26,7 +26,7 @@ async function postAuth(path: 'login' | 'register', values: AuthFormValues): Pro
     throw new Error(await parseErrorMessage(response, fallback))
   }
 
-  return response.json() as Promise<AuthResponse>
+  return await response.json() as Promise<AuthResponse>
 }
 
 export function login(values: AuthFormValues): Promise<AuthResponse> {
@@ -47,7 +47,7 @@ export async function refreshAccessToken(): Promise<AuthResponse | null> {
     return null
   }
 
-  return response.json() as Promise<AuthResponse>
+  return await response.json() as Promise<AuthResponse>
 }
 
 export async function logoutRequest(): Promise<void> {

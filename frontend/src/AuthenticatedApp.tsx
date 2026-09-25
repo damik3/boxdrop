@@ -15,7 +15,8 @@ import {
     completeMultipartUpload
 } from './api/fileApi.ts'
 import {GENERIC_ERROR_MESSAGE} from './api/common.ts'
-import type {FileMetadata, FileShare} from './api/types.ts'
+import type {FileMetadata, FileShare} from './api/fileTypes.ts'
+import {formatFileSize, mapConcurrent, toHex} from "./utils.ts";
 
 interface AuthenticatedAppProps {
     authState: AuthState
@@ -24,23 +25,6 @@ interface AuthenticatedAppProps {
 
 interface FileInput {
     file: File | null
-}
-
-function formatFileSize(sizeInBytes: number): string {
-    if (sizeInBytes < 1024) {
-        return `${sizeInBytes} B`
-    }
-
-    const units = ['KB', 'MB', 'GB', 'TB']
-    let value = sizeInBytes / 1024
-    let unitIndex = 0
-
-    while (value >= 1024 && unitIndex < units.length - 1) {
-        value /= 1024
-        unitIndex += 1
-    }
-
-    return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`
 }
 
 const multipart_chunksize = 10 * 1024 * 1024; // 10MB
@@ -123,12 +107,6 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         }
     }
 
-    function toHex(buffer: ArrayBuffer): string {
-        return [...new Uint8Array(buffer)]
-            .map((byte) => byte.toString(16).padStart(2, '0'))
-            .join('')
-    }
-
     const handleSubmitUpload = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
         event.preventDefault()
 
@@ -144,31 +122,27 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
 
         try {
             if (file.size > multipart_chunksize) {
-                // Handle multipart upload
+                // TODO: fingerprint can be improved with incremental hashing in order to avoid loading the whole file in memory
                 const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
                 const {exists, status} = await fileExists(authState, file.name, toHex(fingerprint), onLogout)
                 if (!exists) {
                     // Upload from scratch flow
                     const numChunks = Math.ceil(file.size / multipart_chunksize)
-                    const initiateMultipartUploadResponse = await initiateMultipartUpload(authState, file.name, toHex(fingerprint), file.size, file.type, numChunks, onLogout)
-                    const fileId = initiateMultipartUploadResponse.fileId
-                    const uploadId = initiateMultipartUploadResponse.uploadId
-
-                    const promises = Array.from({length: numChunks}, async (_, i) => {
+                    const {fileId} = await initiateMultipartUpload(authState, file.name, toHex(fingerprint), file.size, file.type, numChunks, onLogout)
+                    const concurrencyLimit = 10
+                    await mapConcurrent(Array.from({length: numChunks}, (_, i) => i), concurrencyLimit, async (i) => {
                         const partNumber = i + 1
                         const slice = file.slice(i * multipart_chunksize, (i + 1) * multipart_chunksize)
-                        const {url} = await getPresignedUrlForMultipartUpload(authState, fileId, uploadId, partNumber, onLogout)
+                        const {url} = await getPresignedUrlForMultipartUpload(authState, fileId, partNumber, onLogout)
                         const {etag} = await uploadPart(url, slice)
                         const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await slice.arrayBuffer())
-                        await patchMultipartUpload(authState, fileId, uploadId, partNumber, toHex(fingerprint), etag, onLogout)
+                        await patchMultipartUpload(authState, fileId, partNumber, toHex(fingerprint), etag, onLogout)
                     })
 
-                    await Promise.all(promises)
                     await completeMultipartUpload(authState, fileId, onLogout)
 
                     closeUploadModal()
                     await loadFiles()
-                    await pollUntilComplete(fileId)
                 } else if (status === 'COMPLETED') {
                     throw new Error('File already exists')
                 }

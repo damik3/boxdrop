@@ -1,7 +1,7 @@
 import {parseErrorMessage} from "./common.ts";
-import type {User} from "./types.ts";
 import type {AuthState} from "../auth/types.ts";
 import {authorizedFetch} from "./httpClient.ts";
+import type {User} from "./userTypes.ts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 

@@ -1,4 +1,4 @@
 package com.dropboxclone.backend.file.request;
 
-public record GetPresignedUrlMultipartRequest(String fileId, String uploadId, int partNumber) {
+public record GetPresignedUrlMultipartRequest(String fileId, int partNumber) {
 }

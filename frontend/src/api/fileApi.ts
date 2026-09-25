@@ -2,7 +2,7 @@ import type {AuthState} from '../auth/types.ts'
 import type {
     FileExistsResponse, FileMetadata, FileShare, GetDownloadUrlResponse, GetPresignedUrlForMultipartUploadResponse,
     InitiateMultipartUploadResponse, UploadFileResponse, UploadPartResponse
-} from './types.ts'
+} from './fileTypes.ts'
 import {parseErrorMessage} from "./common.ts";
 import {authorizedFetch} from "./httpClient.ts";
 
@@ -305,7 +305,6 @@ export async function initiateMultipartUpload(
 export async function getPresignedUrlForMultipartUpload(
     authState: AuthState,
     fileId: string,
-    uploadId: string,
     partNumber: number,
     onUnauthorized: () => void,
 ): Promise<GetPresignedUrlForMultipartUploadResponse> {
@@ -318,7 +317,7 @@ export async function getPresignedUrlForMultipartUpload(
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({fileId, uploadId, partNumber}),
+            body: JSON.stringify({fileId, partNumber}),
         },
         onUnauthorized
     )
@@ -333,7 +332,6 @@ export async function getPresignedUrlForMultipartUpload(
 export async function patchMultipartUpload(
     authState: AuthState,
     fileId: string,
-    uploadId: string,
     partNumber: number,
     fingerprint: string,
     etag: string,
@@ -348,7 +346,7 @@ export async function patchMultipartUpload(
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({fileId, uploadId, partNumber, fingerprint, etag}),
+            body: JSON.stringify({fileId, partNumber, fingerprint, etag}),
         },
         onUnauthorized
     )

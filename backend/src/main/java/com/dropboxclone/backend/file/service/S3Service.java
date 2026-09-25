@@ -117,4 +117,12 @@ public class S3Service {
                 .build());
     }
 
+    public void abortMultipartUpload(String key, String uploadId) {
+        s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder()
+                .bucket(storageProperties.bucket())
+                .key(key)
+                .uploadId(uploadId)
+                .build());
+    }
+
 }

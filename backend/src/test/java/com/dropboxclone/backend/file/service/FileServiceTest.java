@@ -44,7 +44,10 @@ class FileServiceTest {
     private final SharedFileRepository sharedFileRepository = mock(SharedFileRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final S3Service s3Service = mock(S3Service.class);
-    private final FileService fileService = new FileService(repository, s3Service, sharedFileRepository, userRepository);
+    private final FileService fileService = new FileService(repository,
+            s3Service,
+            sharedFileRepository,
+            userRepository);
     private final AtomicInteger idSequence = new AtomicInteger();
 
     @BeforeEach
@@ -65,31 +68,28 @@ class FileServiceTest {
         FileMetadata failed = metadata(FileUploadStatus.FAILED);
         when(repository.findAllByUploadedByUserId(USER_ID)).thenReturn(List.of(pending, completed, failed));
 
-        assertThat(fileService.getFiles(USER_ID))
-                .extracting(FileMetadata::getStatus)
+        assertThat(fileService.getFiles(USER_ID)).extracting(FileMetadata::getStatus)
                 .containsExactly(FileUploadStatus.PENDING, FileUploadStatus.COMPLETED, FileUploadStatus.FAILED);
     }
 
     @Test
     void getPresignedUrlRejectsInvalidSize() {
-        assertBadRequest(new GetPresignedUrlRequest("photo.png", 0, "image/png"));
-        assertBadRequest(new GetPresignedUrlRequest("photo.png", 50 * 1024 * 1024 + 1, "image/png"));
+        assertBadRequest(new GetPresignedUrlRequest("photo.png", 0L, "image/png"));
+        assertBadRequest(new GetPresignedUrlRequest("photo.png", 50L * 1024 * 1024 + 1, "image/png"));
     }
 
     @Test
     void getPresignedUrlRejectsUnsupportedType() {
-        assertBadRequest(new GetPresignedUrlRequest("notes.txt", 100, "text/plain"));
+        assertBadRequest(new GetPresignedUrlRequest("notes.txt", 100L, "text/plain"));
     }
 
     @Test
     void getPresignedUrlCreatesPendingMetadata() {
-        when(s3Service.presignPutUrl(anyString(), eq("image/png"), eq(FileService.PRESIGN_TTL)))
-                .thenReturn("https://example.test/upload");
+        when(s3Service.presignPutUrl(anyString(), eq("image/png"), eq(FileService.PRESIGN_TTL))).thenReturn(
+                "https://example.test/upload");
 
-        GetPresignedUrlResponse response = fileService.getPresignedUrlForUpload(
-                USER_ID,
-                new GetPresignedUrlRequest("photo.png", 1024, "image/png")
-        );
+        GetPresignedUrlResponse response = fileService.getPresignedUrlForUpload(USER_ID,
+                new GetPresignedUrlRequest("photo.png", 1024L, "image/png"));
 
         assertThat(response.fileId()).isNotBlank();
         assertThat(response.presignedUrl()).isEqualTo("https://example.test/upload");
@@ -107,8 +107,8 @@ class FileServiceTest {
     void getDownloadLinkRejectsMissingFile() {
         when(repository.findById(FILE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> fileService.getDownloadLink(USER_ID, FILE_ID))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.getDownloadLink(USER_ID,
+                FILE_ID)).isInstanceOf(ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -119,8 +119,8 @@ class FileServiceTest {
         file.setUploadedByUserId(OTHER_USER_ID);
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(file));
 
-        assertThatThrownBy(() -> fileService.getDownloadLink(USER_ID, FILE_ID))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.getDownloadLink(USER_ID,
+                FILE_ID)).isInstanceOf(ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
         verify(sharedFileRepository).findByUserIdAndFileId(USER_ID, FILE_ID);
@@ -130,8 +130,8 @@ class FileServiceTest {
     void getDownloadLinkRejectsIncompleteFile() {
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(metadata(FileUploadStatus.PENDING)));
 
-        assertThatThrownBy(() -> fileService.getDownloadLink(USER_ID, FILE_ID))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.getDownloadLink(USER_ID,
+                FILE_ID)).isInstanceOf(ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
@@ -142,8 +142,7 @@ class FileServiceTest {
         file.setUploadedByUserId(OTHER_USER_ID);
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(file));
 
-        assertThatThrownBy(() -> fileService.deleteFile(USER_ID, FILE_ID))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.deleteFile(USER_ID, FILE_ID)).isInstanceOf(ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
         verify(s3Service, never()).deleteObject(anyString());
@@ -166,8 +165,8 @@ class FileServiceTest {
         FileMetadata file = metadata(FileUploadStatus.COMPLETED);
         file.setUploadedByUserId(USER_ID);
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(file));
-        when(sharedFileRepository.findByUserIdAndFileId(OTHER_USER_ID, FILE_ID))
-                .thenReturn(Optional.of(SharedFile.builder().userId(OTHER_USER_ID).fileId(FILE_ID).build()));
+        when(sharedFileRepository.findByUserIdAndFileId(OTHER_USER_ID,
+                FILE_ID)).thenReturn(Optional.of(SharedFile.builder().userId(OTHER_USER_ID).fileId(FILE_ID).build()));
         when(s3Service.presignGetUrl(STORAGE_KEY, FileService.PRESIGN_TTL)).thenReturn("https://example.test/download");
 
         assertThat(fileService.getDownloadLink(OTHER_USER_ID, FILE_ID)).isEqualTo("https://example.test/download");
@@ -178,15 +177,13 @@ class FileServiceTest {
         FileMetadata completed = metadata(FileUploadStatus.COMPLETED);
         FileMetadata pending = metadata(FileUploadStatus.PENDING);
         pending.setId("file-pending");
-        when(sharedFileRepository.findByUserId(OTHER_USER_ID)).thenReturn(List.of(
-                SharedFile.builder().userId(OTHER_USER_ID).fileId(FILE_ID).build(),
-                SharedFile.builder().userId(OTHER_USER_ID).fileId("file-pending").build()
-        ));
+        when(sharedFileRepository.findByUserId(OTHER_USER_ID)).thenReturn(List.of(SharedFile.builder()
+                .userId(OTHER_USER_ID)
+                .fileId(FILE_ID)
+                .build(), SharedFile.builder().userId(OTHER_USER_ID).fileId("file-pending").build()));
         when(repository.findAllById(List.of(FILE_ID, "file-pending"))).thenReturn(List.of(completed, pending));
 
-        assertThat(fileService.getSharedFiles(OTHER_USER_ID))
-                .extracting(FileMetadata::getId)
-                .containsExactly(FILE_ID);
+        assertThat(fileService.getSharedFiles(OTHER_USER_ID)).extracting(FileMetadata::getId).containsExactly(FILE_ID);
     }
 
     @Test
@@ -210,8 +207,8 @@ class FileServiceTest {
     void shareFileIsIdempotent() {
         when(userRepository.findByEmail(RECIPIENT_EMAIL)).thenReturn(Optional.of(recipient()));
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(metadata(FileUploadStatus.COMPLETED)));
-        when(sharedFileRepository.findByUserIdAndFileId(OTHER_USER_ID, FILE_ID))
-                .thenReturn(Optional.of(SharedFile.builder().userId(OTHER_USER_ID).fileId(FILE_ID).build()));
+        when(sharedFileRepository.findByUserIdAndFileId(OTHER_USER_ID,
+                FILE_ID)).thenReturn(Optional.of(SharedFile.builder().userId(OTHER_USER_ID).fileId(FILE_ID).build()));
 
         fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL);
 
@@ -222,8 +219,8 @@ class FileServiceTest {
     void shareFileRejectsUnknownEmail() {
         when(userRepository.findByEmail(RECIPIENT_EMAIL)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL)).isInstanceOf(
+                        ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
         verify(sharedFileRepository, never()).save(any());
@@ -234,8 +231,8 @@ class FileServiceTest {
         when(userRepository.findByEmail(RECIPIENT_EMAIL)).thenReturn(Optional.of(recipient()));
         when(repository.findById(FILE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL)).isInstanceOf(
+                        ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -247,8 +244,8 @@ class FileServiceTest {
         file.setUploadedByUserId("someone-else");
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(file));
 
-        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL)).isInstanceOf(
+                        ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
         verify(sharedFileRepository, never()).save(any());
@@ -259,8 +256,8 @@ class FileServiceTest {
         when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(owner()));
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(metadata(FileUploadStatus.COMPLETED)));
 
-        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, "alice@example.com"))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, "alice@example.com")).isInstanceOf(
+                        ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         verify(sharedFileRepository, never()).save(any());
@@ -271,8 +268,8 @@ class FileServiceTest {
         when(userRepository.findByEmail(RECIPIENT_EMAIL)).thenReturn(Optional.of(recipient()));
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(metadata(FileUploadStatus.PENDING)));
 
-        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.shareFile(USER_ID, FILE_ID, RECIPIENT_EMAIL)).isInstanceOf(
+                        ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         verify(sharedFileRepository, never()).save(any());
@@ -284,8 +281,8 @@ class FileServiceTest {
         file.setUploadedByUserId(USER_ID);
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(file));
 
-        assertThatThrownBy(() -> fileService.getFileShares(OTHER_USER_ID, FILE_ID))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.getFileShares(OTHER_USER_ID,
+                FILE_ID)).isInstanceOf(ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
@@ -340,8 +337,7 @@ class FileServiceTest {
     void expireStalePendingCompletesWhenObjectExists() {
         Instant now = Instant.parse("2026-01-01T00:20:00Z");
         FileMetadata stale = metadata(FileUploadStatus.PENDING);
-        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any()))
-                .thenReturn(List.of(stale));
+        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any())).thenReturn(List.of(stale));
         when(s3Service.objectExists(STORAGE_KEY)).thenReturn(true);
 
         fileService.expireStalePendingUploads(now);
@@ -355,8 +351,7 @@ class FileServiceTest {
     void expireStalePendingFailsWhenObjectMissing() {
         Instant now = Instant.parse("2026-01-01T00:20:00Z");
         FileMetadata stale = metadata(FileUploadStatus.PENDING);
-        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any()))
-                .thenReturn(List.of(stale));
+        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any())).thenReturn(List.of(stale));
         when(s3Service.objectExists(STORAGE_KEY)).thenReturn(false);
 
         fileService.expireStalePendingUploads(now);
@@ -371,8 +366,7 @@ class FileServiceTest {
         Instant now = Instant.parse("2026-01-01T00:20:00Z");
         FileMetadata stale = metadata(FileUploadStatus.PENDING);
         stale.setStorageKey(null);
-        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any()))
-                .thenReturn(List.of(stale));
+        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any())).thenReturn(List.of(stale));
 
         fileService.expireStalePendingUploads(now);
 
@@ -381,8 +375,8 @@ class FileServiceTest {
     }
 
     private void assertBadRequest(GetPresignedUrlRequest request) {
-        assertThatThrownBy(() -> fileService.getPresignedUrlForUpload(USER_ID, request))
-                .isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> fileService.getPresignedUrlForUpload(USER_ID, request)).isInstanceOf(
+                        ResponseStatusException.class)
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
@@ -391,7 +385,7 @@ class FileServiceTest {
         return FileMetadata.builder()
                 .id(FILE_ID)
                 .name("photo.png")
-                .size(1024)
+                .size(1024L)
                 .mimeType("image/png")
                 .uploadedByUserId(USER_ID)
                 .storageKey(STORAGE_KEY)

@@ -19,7 +19,7 @@ public class FileMetadata {
 
     String name;
 
-    Integer size;
+    Long size;
 
     String mimeType;
 

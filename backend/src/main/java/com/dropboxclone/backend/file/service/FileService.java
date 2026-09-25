@@ -55,7 +55,8 @@ public class FileService {
 
     public GetPresignedUrlResponse getPresignedUrlForUpload(String userId,
             GetPresignedUrlRequest getPresignedUrlRequest) {
-        validate(getPresignedUrlRequest);
+        validateSize(getPresignedUrlRequest.size());
+        validateSupportedType(getPresignedUrlRequest.mimeType());
 
         Instant now = Instant.now();
         FileMetadata fileMetadata = fileMetadataRepository.save(FileMetadata.builder()
@@ -76,11 +77,14 @@ public class FileService {
                 s3Service.presignPutUrl(key, fileMetadata.getMimeType(), PRESIGN_TTL));
     }
 
-    private void validate(GetPresignedUrlRequest req) {
-        if (req.size() <= 0 || req.size() > MAX_SIZE) {
+    private void validateSize(Long size) {
+        if (size <= 0 || size > MAX_SIZE) {
             throw ApiError.INVALID_FILE_SIZE.exception();
         }
-        if (!ALLOWED_TYPES.contains(req.mimeType())) {
+    }
+
+    private void validateSupportedType(String type) {
+        if (!ALLOWED_TYPES.contains(type)) {
             throw ApiError.UNSUPPORTED_CONTENT_TYPE.exception();
         }
     }
@@ -119,6 +123,9 @@ public class FileService {
         }
 
         s3Service.deleteObject(file.getStorageKey());
+        if (file.getS3UploadId() != null && file.getStatus() != FileUploadStatus.COMPLETED) {
+            s3Service.abortMultipartUpload(file.getStorageKey(), file.getS3UploadId());
+        }
         sharedFileRepository.deleteByFileId(fileId);
         fileMetadataRepository.delete(file);
     }
@@ -232,9 +239,12 @@ public class FileService {
     public InitiateMultipartUploadResponse initiateMultipartUpload(String userId,
             String filename,
             String mimeType,
-            Integer size,
+            Long size,
             String fingerprint,
             Integer numChunks) {
+        validateSize(size);
+        validateSupportedType(mimeType);
+
         Instant now = Instant.now();
         FileMetadata fileMetadata = fileMetadataRepository.save(FileMetadata.builder()
                 .name(filename)
@@ -259,36 +269,43 @@ public class FileService {
         fileMetadata.setS3UploadId(uploadId);
         fileMetadata.setStorageKey(key);
         fileMetadataRepository.save(fileMetadata);
-        return new InitiateMultipartUploadResponse(fileMetadata.getId(), uploadId);
+        return new InitiateMultipartUploadResponse(fileMetadata.getId());
     }
 
-    public String presignUploadPart(String userId, String fileId, String uploadId, int partNumber) {
+    public String presignUploadPart(String userId, String fileId, int partNumber) {
         FileMetadata fileMetadata = requireOwnedFile(userId, fileId);
         String key = fileMetadata.getStorageKey();
         Duration ttl = Duration.ofMinutes(15);
-        return s3Service.presignUploadPart(key, uploadId, partNumber, ttl);
+        return s3Service.presignUploadPart(key, fileMetadata.getS3UploadId(), partNumber, ttl);
     }
 
     public void patchMultipartUpload(String userId,
             String fileId,
-            String uploadId,
             Integer partNumber,
             String fingerprint,
             String etag) {
         FileMetadata file = requireOwnedFile(userId, fileId);
         String key = file.getStorageKey();
-        ListPartsResponse listPartsResponse = s3Service.listParts(key, uploadId);
+        ListPartsResponse listPartsResponse = s3Service.listParts(key, file.getS3UploadId());
         boolean valid = listPartsResponse.parts()
                 .stream()
                 .anyMatch(part -> part.eTag().equals(etag) && Objects.equals(part.partNumber(), partNumber));
         if (valid) {
             fileMetadataRepository.markChunkUploaded(fileId, partNumber, FileChunkStatus.UPLOADED, fingerprint, etag);
+        } else {
+            throw ApiError.FILE_NOT_UPLOADED.exception();
         }
 
     }
 
     public void completeMultipartUpload(String userId, String fileId) {
         FileMetadata file = requireOwnedFile(userId, fileId);
+        if (file.getFileChunks().isEmpty()) {
+            throw ApiError.FILE_NOT_FOUND.exception();
+        }
+        if (file.getStatus().equals(FileUploadStatus.COMPLETED)) {
+            return;
+        }
         String key = file.getStorageKey();
         List<Part> parts = s3Service.listParts(key, file.getS3UploadId()).parts();
 

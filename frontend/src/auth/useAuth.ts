@@ -12,7 +12,7 @@ interface UseAuthResult {
 export function useAuth(): UseAuthResult {
     const [authState, setAuthState] = useState<AuthState | null>(() => readAuthState())
 
-    const value = useMemo<UseAuthResult>(() => ({
+    return useMemo<UseAuthResult>(() => ({
         authState,
         async authenticate(mode, values) {
             const response = mode === 'login' ? await login(values) : await register(values)
@@ -28,6 +28,4 @@ export function useAuth(): UseAuthResult {
             }
         },
     }), [authState])
-
-    return value
 }

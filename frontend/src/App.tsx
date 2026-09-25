@@ -6,7 +6,8 @@ import {useAuth} from './auth/useAuth'
 import type {AuthMode} from './auth/types'
 import {getUser} from "./api/userApi.ts";
 import {GENERIC_ERROR_MESSAGE} from "./api/common.ts";
-import type {User} from "./api/types.ts";
+
+import type {User} from "./api/userTypes.ts";
 
 function App() {
     const {authState, authenticate, logout} = useAuth()

@@ -99,7 +99,7 @@ export function uploadPart(
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
                 const etag = xhr.getResponseHeader('ETag') ?? ''
-                resolve({ etag })
+                resolve({etag})
                 return
             }
             reject(new Error('Could not upload this file. Try again.'))

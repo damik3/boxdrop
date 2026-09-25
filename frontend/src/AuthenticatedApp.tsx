@@ -4,19 +4,17 @@ import * as React from 'react'
 import {
     deleteFile,
     getDownloadUrl,
-    getFileShares,
     getFiles,
     getSharedFiles,
     requestUploadUrl,
-    shareFile,
-    unshareFile,
     uploadFile,
     fileExists, initiateMultipartUpload, getPresignedUrlForMultipartUpload, uploadPart, patchMultipartUpload,
     completeMultipartUpload
 } from './api/fileApi.ts'
 import {GENERIC_ERROR_MESSAGE} from './api/common.ts'
-import type {FileMetadata, FileShare} from './api/fileTypes.ts'
+import type {FileMetadata} from './api/fileTypes.ts'
 import {formatFileSize, mapConcurrent, toHex} from "./utils.ts";
+import {ShareModal} from "./components/ShareModal.tsx";
 
 interface AuthenticatedAppProps {
     authState: AuthState
@@ -32,11 +30,6 @@ const multipart_chunksize = 10 * 1024 * 1024; // 10MB
 export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
     const [isUploadModalOpen, setIsUploadModalOpen] = React.useState(false)
     const [fileToShare, setFileToShare] = React.useState<FileMetadata | null>(null)
-    const [shareEmail, setShareEmail] = React.useState('')
-    const [shares, setShares] = React.useState<FileShare[]>([])
-    const [shareErrorMessage, setShareErrorMessage] = React.useState<string | null>(null)
-    const [loadingShares, setLoadingShares] = React.useState(false)
-    const [sharingFile, setSharingFile] = React.useState(false)
     const [files, setFiles] = React.useState<FileMetadata[]>([])
     const [sharedFiles, setSharedFiles] = React.useState<FileMetadata[]>([])
     const [fileInputState, setFileInputState] = React.useState<FileInput>({file: null})
@@ -107,6 +100,45 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         }
     }
 
+    const multipartUpload = async (file: File): Promise<void> => {
+        // TODO: fingerprint can be improved with incremental hashing in order to avoid loading the whole file in memory
+        const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+        const {exists, status} = await fileExists(authState, file.name, toHex(fingerprint), onLogout)
+        if (!exists) {
+            // Upload from scratch flow
+            const numChunks = Math.ceil(file.size / multipart_chunksize)
+            const {fileId} = await initiateMultipartUpload(authState, file.name, toHex(fingerprint), file.size, file.type, numChunks, onLogout)
+            const concurrencyLimit = 10
+            await mapConcurrent(Array.from({length: numChunks}, (_, i) => i), concurrencyLimit, async (i) => {
+                const partNumber = i + 1
+                const slice = file.slice(i * multipart_chunksize, (i + 1) * multipart_chunksize)
+                const {url} = await getPresignedUrlForMultipartUpload(authState, fileId, partNumber, onLogout)
+                const {etag} = await uploadPart(url, slice)
+                const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await slice.arrayBuffer())
+                await patchMultipartUpload(authState, fileId, partNumber, toHex(fingerprint), etag, onLogout)
+            })
+
+            await completeMultipartUpload(authState, fileId, onLogout)
+
+            closeUploadModal()
+            await loadFiles()
+        } else if (status === 'COMPLETED') {
+            throw new Error('File already exists')
+        } else if (status === 'PENDING') {
+            throw new Error('Resume not implemented')
+        } else if (status === 'FAILED') {
+            throw new Error('Upload failed')
+        }
+    }
+
+    const regularUpload = async (file: File): Promise<void> => {
+        const {fileId, presignedUrl} = await requestUploadUrl(authState, file, onLogout)
+        await uploadFile(presignedUrl, file, setUploadProgress)
+        closeUploadModal()
+        await loadFiles()
+        await pollUntilComplete(fileId)
+    }
+
     const handleSubmitUpload = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
         event.preventDefault()
 
@@ -119,45 +151,11 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         setUploadErrorMessage(null)
 
         const file = fileInputState.file
-
         try {
             if (file.size > multipart_chunksize) {
-                // TODO: fingerprint can be improved with incremental hashing in order to avoid loading the whole file in memory
-                const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
-                const {exists, status} = await fileExists(authState, file.name, toHex(fingerprint), onLogout)
-                if (!exists) {
-                    // Upload from scratch flow
-                    const numChunks = Math.ceil(file.size / multipart_chunksize)
-                    const {fileId} = await initiateMultipartUpload(authState, file.name, toHex(fingerprint), file.size, file.type, numChunks, onLogout)
-                    const concurrencyLimit = 10
-                    await mapConcurrent(Array.from({length: numChunks}, (_, i) => i), concurrencyLimit, async (i) => {
-                        const partNumber = i + 1
-                        const slice = file.slice(i * multipart_chunksize, (i + 1) * multipart_chunksize)
-                        const {url} = await getPresignedUrlForMultipartUpload(authState, fileId, partNumber, onLogout)
-                        const {etag} = await uploadPart(url, slice)
-                        const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await slice.arrayBuffer())
-                        await patchMultipartUpload(authState, fileId, partNumber, toHex(fingerprint), etag, onLogout)
-                    })
-
-                    await completeMultipartUpload(authState, fileId, onLogout)
-
-                    closeUploadModal()
-                    await loadFiles()
-                } else if (status === 'COMPLETED') {
-                    throw new Error('File already exists')
-                }
-                else if (status === 'PENDING') {
-                    throw new Error('Resume not implemented')
-                }
-                else if (status === 'FAILED') {
-                    throw new Error('Upload failed')
-                }
+                await multipartUpload(file)
             } else {
-                const {fileId, presignedUrl} = await requestUploadUrl(authState, file, onLogout)
-                await uploadFile(presignedUrl, file, setUploadProgress)
-                closeUploadModal()
-                await loadFiles()
-                await pollUntilComplete(fileId)
+                await regularUpload(file)
             }
         } catch (error) {
             setUploadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
@@ -192,83 +190,6 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             window.open(url, '_blank', 'noopener,noreferrer')
         } catch (error) {
             setLoadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
-        }
-    }
-
-    const loadShares = async (fileId: string): Promise<void> => {
-        setLoadingShares(true)
-        setShareErrorMessage(null)
-
-        try {
-            const result = await getFileShares(authState, fileId, onLogout)
-            setShares(result)
-        } catch (error) {
-            setShares([])
-            setShareErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
-        } finally {
-            setLoadingShares(false)
-        }
-    }
-
-    const openShareModal = (file: FileMetadata): void => {
-        setFileToShare(file)
-        setShareEmail('')
-        setShares([])
-        setShareErrorMessage(null)
-        void loadShares(file.id)
-    }
-
-    const closeShareModal = (): void => {
-        setFileToShare(null)
-        setShareEmail('')
-        setShares([])
-        setShareErrorMessage(null)
-        setSharingFile(false)
-    }
-
-    const handleSubmitShare = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
-        event.preventDefault()
-
-        if (!fileToShare) {
-            return
-        }
-
-        const email = shareEmail.trim()
-        if (!email) {
-            return
-        }
-
-        setSharingFile(true)
-        setShareErrorMessage(null)
-
-        try {
-            await shareFile(authState, fileToShare.id, email, onLogout)
-            setShareEmail('')
-            await loadShares(fileToShare.id)
-        } catch (error) {
-            setShareErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
-        } finally {
-            setSharingFile(false)
-        }
-    }
-
-    const handleUnshare = async (email: string): Promise<void> => {
-        if (!fileToShare) {
-            return
-        }
-
-        const confirmed = window.confirm(`Remove access for ${email}?`)
-        if (!confirmed) {
-            return
-        }
-
-        setShareErrorMessage(null)
-
-        try {
-            await unshareFile(authState, fileToShare.id, email, onLogout)
-            await loadShares(fileToShare.id)
-        } catch (error) {
-            setShareErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         }
     }
 
@@ -363,78 +284,14 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             )}
 
             {fileToShare && (
-                <div className="modal-backdrop">
-                    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="share-file-title">
-                        <div className="modal__header">
-                            <h3 id="share-file-title">Share file</h3>
-                            <span className="hero__eyebrow">Share</span>
-                        </div>
-
-                        <form className="share-file-form" onSubmit={handleSubmitShare}>
-                            <div className="file-status">
-                                <span className="file-status__label">File</span>
-                                <strong>{fileToShare.name}</strong>
-                            </div>
-
-                            <label className="field">
-                                <span>Share with</span>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    autoComplete="email"
-                                    value={shareEmail}
-                                    onChange={(event) => {
-                                        setShareEmail(event.target.value)
-                                        setShareErrorMessage(null)
-                                    }}
-                                    placeholder="alex@example.com"
-                                    required
-                                />
-                            </label>
-
-                            <div>
-                                <span className="share-recipients__heading">People with access</span>
-                                {loadingShares ? (
-                                    <p className="share-recipients__empty">Loading...</p>
-                                ) : null}
-                                {!loadingShares && shares.length === 0 && !shareErrorMessage ? (
-                                    <p className="share-recipients__empty">Not shared with anyone yet.</p>
-                                ) : null}
-                                {!loadingShares && shares.length > 0 ? (
-                                    <ul className="share-recipients">
-                                        {shares.map((share) => (
-                                            <li key={share.userId} className="share-recipients__item">
-                                                <span>{share.email}</span>
-                                                <a
-                                                    href="#"
-                                                    onClick={(event) => {
-                                                        event.preventDefault()
-                                                        void handleUnshare(share.email)
-                                                    }}
-                                                >
-                                                    Remove
-                                                </a>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : null}
-                            </div>
-
-                            {shareErrorMessage ? <p className="auth-form__error">{shareErrorMessage}</p> : null}
-
-                            <div className="modal__actions">
-                                <button type="button" className="secondary-button" onClick={closeShareModal}
-                                        disabled={sharingFile}>
-                                    Cancel
-                                </button>
-                                <button type="submit" className="primary-button"
-                                        disabled={!shareEmail.trim() || sharingFile}>
-                                    {sharingFile ? 'Sharing...' : 'Share'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <ShareModal
+                    authState={authState}
+                    fileToShare={fileToShare}
+                    onLogout={onLogout}
+                    onClose={() => {
+                        setFileToShare(null)
+                    }}
+                />
             )}
 
             <section className="panel-grid">
@@ -505,7 +362,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                                                     href="#"
                                                     onClick={(e) => {
                                                         e.preventDefault()
-                                                        openShareModal(file)
+                                                        setFileToShare(file)
                                                     }}
                                                 >
                                                     Share

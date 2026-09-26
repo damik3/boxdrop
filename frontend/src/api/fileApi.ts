@@ -24,7 +24,7 @@ export async function getFiles(authState: AuthState, onUnauthorized: () => void)
         throw new Error(await parseErrorMessage(response, 'Could not load your files.'))
     }
 
-    return await response.json() as Promise<FileMetadata[]>
+    return await response.json() as FileMetadata[]
 }
 
 export async function requestUploadUrl(authState: AuthState, file: File, onUnauthorized: () => void): Promise<UploadFileResponse> {
@@ -51,7 +51,7 @@ export async function requestUploadUrl(authState: AuthState, file: File, onUnaut
         throw new Error(await parseErrorMessage(response, 'Could not start the upload.'))
     }
 
-    return await response.json() as Promise<UploadFileResponse>
+    return await response.json() as UploadFileResponse
 }
 
 export function uploadFile(
@@ -130,7 +130,7 @@ export async function getDownloadUrl(authState: AuthState, fileId: string, onUna
         throw new Error(await parseErrorMessage(response, 'Could not download this file.'))
     }
 
-    return await response.json() as Promise<GetDownloadUrlResponse>
+    return await response.json() as GetDownloadUrlResponse
 }
 
 export async function deleteFile(authState: AuthState, fileId: string, onUnauthorized: () => void): Promise<void> {
@@ -168,7 +168,7 @@ export async function getSharedFiles(authState: AuthState, onUnauthorized: () =>
         throw new Error(await parseErrorMessage(response, 'Could not load shared files.'))
     }
 
-    return await response.json() as Promise<FileMetadata[]>
+    return await response.json() as FileMetadata[]
 }
 
 export async function getFileShares(
@@ -192,7 +192,7 @@ export async function getFileShares(
         throw new Error(await parseErrorMessage(response, 'Could not load who this file is shared with.'))
     }
 
-    return await response.json() as Promise<FileShare[]>
+    return await response.json() as FileShare[]
 }
 
 export async function shareFile(
@@ -269,7 +269,7 @@ export async function fileExists(
         throw new Error(await parseErrorMessage(response, 'Could not check if file exists.'))
     }
 
-    return await response.json() as Promise<FileExistsResponse>
+    return await response.json() as FileExistsResponse
 }
 
 export async function initiateMultipartUpload(
@@ -299,7 +299,7 @@ export async function initiateMultipartUpload(
         throw new Error(await parseErrorMessage(response, 'Could not initiate multipart upload.'))
     }
 
-    return await response.json() as Promise<InitiateMultipartUploadResponse>
+    return await response.json() as InitiateMultipartUploadResponse
 }
 
 export async function getPresignedUrlForMultipartUpload(
@@ -326,7 +326,7 @@ export async function getPresignedUrlForMultipartUpload(
         throw new Error(await parseErrorMessage(response, 'Could not get presigned URL for multipart upload.'))
     }
 
-    return await response.json() as Promise<GetPresignedUrlForMultipartUploadResponse>
+    return await response.json() as GetPresignedUrlForMultipartUploadResponse
 }
 
 export async function patchMultipartUpload(

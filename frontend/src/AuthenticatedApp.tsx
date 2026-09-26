@@ -9,9 +9,9 @@ import {
 } from './api/fileApi.ts'
 import {GENERIC_ERROR_MESSAGE} from './api/common.ts'
 import type {FileMetadata} from './api/fileTypes.ts'
-import {formatFileSize} from "./utils.ts";
 import {ShareModal} from "./components/ShareModal.tsx";
 import {UploadModal} from "./components/UploadModal.tsx";
+import {FilesTable} from "./components/FilesTable.tsx";
 
 interface AuthenticatedAppProps {
     authState: AuthState
@@ -19,14 +19,16 @@ interface AuthenticatedAppProps {
 }
 
 export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
+    const [files, setFiles] = React.useState<FileMetadata[]>([])
+    const [loadingFiles, setLoadingFiles] = React.useState(true)
+    const [loadErrorMessage, setLoadErrorMessage] = React.useState<string | null>(null)
+
+    const [sharedFiles, setSharedFiles] = React.useState<FileMetadata[]>([])
+    const [loadingSharedFiles, setLoadingSharedFiles] = React.useState(true)
+    const [sharedLoadErrorMessage, setSharedLoadErrorMessage] = React.useState<string | null>(null)
+
     const [isUploadModalOpen, setIsUploadModalOpen] = React.useState(false)
     const [fileToShare, setFileToShare] = React.useState<FileMetadata | null>(null)
-    const [files, setFiles] = React.useState<FileMetadata[]>([])
-    const [sharedFiles, setSharedFiles] = React.useState<FileMetadata[]>([])
-    const [loadErrorMessage, setLoadErrorMessage] = React.useState<string | null>(null)
-    const [sharedLoadErrorMessage, setSharedLoadErrorMessage] = React.useState<string | null>(null)
-    const [loadingFiles, setLoadingFiles] = React.useState(true)
-    const [loadingSharedFiles, setLoadingSharedFiles] = React.useState(true)
 
     const loadFiles = React.useCallback(async () => {
         setLoadingFiles(true)
@@ -89,17 +91,21 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         }
     }
 
-    const handleDownloadFile = async (file: FileMetadata): Promise<void> => {
+    const handleDownloadFile = async (
+        file: FileMetadata,
+        setError: (message: string | null) => void
+    ): Promise<void> => {
         try {
             const {url} = await getDownloadUrl(authState, file.id, onLogout)
             window.open(url, '_blank', 'noopener,noreferrer')
         } catch (error) {
-            setLoadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
+            setError(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         }
     }
 
     return (
         <main className="app-shell">
+
             <section className="hero hero--compact">
                 <div className="hero__content">
                     <h2>Welcome, {authState.email}</h2>
@@ -147,156 +153,24 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                 />
             )}
 
-            <section className="panel-grid">
-                <article className="panel panel--wide">
-                    <h2>Files</h2>
-                    <div className="files-table-container">
-                        <table className="files-table">
-                            <thead>
-                            <tr>
-                                <th scope="col">Name</th>
-                                <th scope="col">Status</th>
-                                <th scope="col">Size</th>
-                                <th scope="col">Action</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {loadingFiles ? (
-                                    <tr>
-                                        <td colSpan={4}>Loading files...</td>
-                                    </tr>
-                                ) :
-                                null
-                            }
-                            {
-                                !loadingFiles && loadErrorMessage ? (
-                                    <tr>
-                                        <td colSpan={4}>{loadErrorMessage}</td>
-                                    </tr>
-                                ) : null
-                            }
-                            {
-                                !loadingFiles && !loadErrorMessage && files.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={4}>No files available yet.</td>
-                                    </tr>
-                                ) : null
-                            }
-                            {
-                                files.map((file: FileMetadata) => (
-                                    <tr key={file.id}>
-                                        <td>{file.name}</td>
-                                        <td>{file.status}</td>
-                                        <td>{formatFileSize(file.size)}</td>
-                                        <td>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            gap: '1rem',
-                                            justifyContent: 'flex-end',
-                                            minWidth: '9rem'
-                                        }}>
-                                            {file.status === 'COMPLETED' ? (
-                                                <a
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault()
-                                                        void handleDownloadFile(file)
-                                                    }}
-                                                >
-                                                    Download
-                                                </a>
-                                            ) : (
-                                                <span style={{visibility: 'hidden'}}>Download</span>
-                                            )}
-                                            <a
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault()
-                                                    void handleDeleteFile(file)
-                                                }}
-                                            >
-                                                Delete
-                                            </a>
-                                            {file.status === 'COMPLETED' ? (
-                                                <a
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault()
-                                                        setFileToShare(file)
-                                                    }}
-                                                >
-                                                    Share
-                                                </a>
-                                            ) : (
-                                                <span style={{visibility: 'hidden'}}>Share</span>
-                                            )}
-                                        </span>
-                                        </td>
-                                    </tr>
-                                ))
-                            }
-                            </tbody>
-                        </table>
-                    </div>
-                </article>
-            </section>
+            <FilesTable title={"Files"} files={files} loadingFiles={loadingFiles} loadErrorMessage={loadErrorMessage}
+                        showDelete={true}
+                        showShare={true}
+                        showUploader={false}
+                        handleDownload={(file) => handleDownloadFile(file, setLoadErrorMessage)}
+                        handleDelete={handleDeleteFile}
+                        handleShare={(file) => setFileToShare(file)}/>
 
             <div className="horizontal-divider"></div>
 
-            <section className="panel-grid">
-                <article className="panel panel--wide">
-                    <h2>Files shared with me</h2>
-                    <div className="files-table-container">
-                        <table className="files-table">
-                            <thead>
-                            <tr>
-                                <th scope="col">Name</th>
-                                <th scope="col">Status</th>
-                                <th scope="col">Size</th>
-                                <th scope="col">Uploader</th>
-                                <th scope="col">Action</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {loadingSharedFiles ? (
-                                <tr>
-                                    <td colSpan={5}>Loading files...</td>
-                                </tr>
-                            ) : null}
-                            {!loadingSharedFiles && sharedLoadErrorMessage ? (
-                                <tr>
-                                    <td colSpan={5}>{sharedLoadErrorMessage}</td>
-                                </tr>
-                            ) : null}
-                            {!loadingSharedFiles && !sharedLoadErrorMessage && sharedFiles.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5}>No files have been shared with you yet.</td>
-                                </tr>
-                            ) : null}
-                            {sharedFiles.map((file: FileMetadata) => (
-                                <tr key={file.id}>
-                                    <td>{file.name}</td>
-                                    <td>{file.status}</td>
-                                    <td>{formatFileSize(file.size)}</td>
-                                    <td>{file.uploadedBy}</td>
-                                    <td>
-                                        <a
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault()
-                                                void handleDownloadFile(file)
-                                            }}
-                                        >
-                                            Download
-                                        </a>
-                                    </td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </article>
-            </section>
+            <FilesTable title={"Files shared with me"} files={sharedFiles} loadingFiles={loadingSharedFiles}
+                        loadErrorMessage={sharedLoadErrorMessage}
+                        showDelete={false}
+                        showShare={false}
+                        showUploader={true}
+                        handleDownload={(file) => handleDownloadFile(file, setSharedLoadErrorMessage)}
+            />
+
         </main>
     )
 }

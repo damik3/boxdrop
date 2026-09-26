@@ -76,20 +76,20 @@ export function ShareModal({authState, onLogout, fileToShare, onClose}: IShareMo
             setShareErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
         }
     }
-   
+
     return (
         <div className="modal-backdrop">
             <div className="modal" role="dialog" aria-modal="true" aria-labelledby="share-file-title">
                 <div className="modal__header">
-                    <h3 id="share-file-title">Share file</h3>
-                    <span className="hero__eyebrow">Share</span>
-                </div>
-
-                <form className="share-file-form" onSubmit={handleSubmitShare}>
                     <div className="file-status">
                         <span className="file-status__label">File</span>
                         <strong>{fileToShare.name}</strong>
                     </div>
+                    <span className="hero__eyebrow">Share</span>
+                </div>
+
+                <form className="share-file-form" onSubmit={handleSubmitShare}>
+
 
                     <label className="field">
                         <span>Share with</span>
@@ -129,7 +129,8 @@ export function ShareModal({authState, onLogout, fileToShare, onClose}: IShareMo
                                                 void handleUnshare(share.email)
                                             }}
                                         >
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                                 strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                                 <path d="M4 7h16"/>
                                                 <path d="M9 7V5h6v2"/>
                                                 <path d="M7 7l1 12h8l1-12"/>

@@ -6,41 +6,27 @@ import {
     getDownloadUrl,
     getFiles,
     getSharedFiles,
-    requestUploadUrl,
-    uploadFile,
-    fileExists, initiateMultipartUpload, getPresignedUrlForMultipartUpload, uploadPart, patchMultipartUpload,
-    completeMultipartUpload
 } from './api/fileApi.ts'
 import {GENERIC_ERROR_MESSAGE} from './api/common.ts'
 import type {FileMetadata} from './api/fileTypes.ts'
-import {formatFileSize, mapConcurrent, toHex} from "./utils.ts";
+import {formatFileSize} from "./utils.ts";
 import {ShareModal} from "./components/ShareModal.tsx";
+import {UploadModal} from "./components/UploadModal.tsx";
 
 interface AuthenticatedAppProps {
     authState: AuthState
     onLogout: () => void
 }
 
-interface FileInput {
-    file: File | null
-}
-
-const multipart_chunksize = 10 * 1024 * 1024; // 10MB
-
 export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
     const [isUploadModalOpen, setIsUploadModalOpen] = React.useState(false)
     const [fileToShare, setFileToShare] = React.useState<FileMetadata | null>(null)
     const [files, setFiles] = React.useState<FileMetadata[]>([])
     const [sharedFiles, setSharedFiles] = React.useState<FileMetadata[]>([])
-    const [fileInputState, setFileInputState] = React.useState<FileInput>({file: null})
     const [loadErrorMessage, setLoadErrorMessage] = React.useState<string | null>(null)
     const [sharedLoadErrorMessage, setSharedLoadErrorMessage] = React.useState<string | null>(null)
-    const [uploadErrorMessage, setUploadErrorMessage] = React.useState<string | null>(null)
     const [loadingFiles, setLoadingFiles] = React.useState(true)
     const [loadingSharedFiles, setLoadingSharedFiles] = React.useState(true)
-    const [uploadingFile, setUploadingFile] = React.useState(false)
-    const [uploadProgress, setUploadProgress] = React.useState<number | null>(null)
-    const fileRef = React.useRef<HTMLInputElement | null>(null)
 
     const loadFiles = React.useCallback(async () => {
         setLoadingFiles(true)
@@ -76,17 +62,6 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         void loadFiles()
     }, [loadFiles])
 
-    const closeUploadModal = (): void => {
-        setIsUploadModalOpen(false)
-        setUploadingFile(false)
-        setUploadProgress(null)
-        setUploadErrorMessage(null)
-        setFileInputState({file: null})
-        if (fileRef.current) {
-            fileRef.current.value = ''
-        }
-    }
-
     const pollUntilComplete = async (fileId: string, intervalMs: number = 2000) => {
         const maxTries = 15
         for (let i = 0; i < maxTries; i++) {
@@ -98,76 +73,6 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                 return
             }
         }
-    }
-
-    const multipartUpload = async (file: File): Promise<void> => {
-        // TODO: fingerprint can be improved with incremental hashing in order to avoid loading the whole file in memory
-        const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
-        const {exists, status} = await fileExists(authState, file.name, toHex(fingerprint), onLogout)
-        if (!exists) {
-            // Upload from scratch flow
-            const numChunks = Math.ceil(file.size / multipart_chunksize)
-            const {fileId} = await initiateMultipartUpload(authState, file.name, toHex(fingerprint), file.size, file.type, numChunks, onLogout)
-            const concurrencyLimit = 10
-            await mapConcurrent(Array.from({length: numChunks}, (_, i) => i), concurrencyLimit, async (i) => {
-                const partNumber = i + 1
-                const slice = file.slice(i * multipart_chunksize, (i + 1) * multipart_chunksize)
-                const {url} = await getPresignedUrlForMultipartUpload(authState, fileId, partNumber, onLogout)
-                const {etag} = await uploadPart(url, slice)
-                const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await slice.arrayBuffer())
-                await patchMultipartUpload(authState, fileId, partNumber, toHex(fingerprint), etag, onLogout)
-            })
-
-            await completeMultipartUpload(authState, fileId, onLogout)
-
-            closeUploadModal()
-            await loadFiles()
-        } else if (status === 'COMPLETED') {
-            throw new Error('File already exists')
-        } else if (status === 'PENDING') {
-            throw new Error('Resume not implemented')
-        } else if (status === 'FAILED') {
-            throw new Error('Upload failed')
-        }
-    }
-
-    const regularUpload = async (file: File): Promise<void> => {
-        const {fileId, presignedUrl} = await requestUploadUrl(authState, file, onLogout)
-        await uploadFile(presignedUrl, file, setUploadProgress)
-        closeUploadModal()
-        await loadFiles()
-        await pollUntilComplete(fileId)
-    }
-
-    const handleSubmitUpload = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
-        event.preventDefault()
-
-        if (!fileInputState.file) {
-            return
-        }
-
-        setUploadingFile(true)
-        setUploadProgress(0)
-        setUploadErrorMessage(null)
-
-        const file = fileInputState.file
-        try {
-            if (file.size > multipart_chunksize) {
-                await multipartUpload(file)
-            } else {
-                await regularUpload(file)
-            }
-        } catch (error) {
-            setUploadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
-            setUploadingFile(false)
-            setUploadProgress(null)
-        }
-    }
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
-        const selectedFile = event.target.files?.[0] ?? null
-        setUploadErrorMessage(null)
-        setFileInputState({file: selectedFile})
     }
 
     const handleDeleteFile = async (file: FileMetadata): Promise<void> => {
@@ -213,74 +118,22 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
             </section>
 
             {isUploadModalOpen && (
-                <div className="modal-backdrop">
-                    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="upload-file-title">
-                        <div className="modal__header">
-                            <h3 id="upload-file-title">Upload file</h3>
-                            <span className="hero__eyebrow">Transfer</span>
-                        </div>
-
-                        <form className="upload-file-form" onSubmit={handleSubmitUpload}>
-                            <label className="field">
-                                <span>Select a file</span>
-
-                                <div className="input-group">
-                                    <input
-                                        type="text"
-                                        value={fileInputState.file ? fileInputState.file.name : 'No file selected'}
-                                        readOnly
-                                    />
-                                    <button
-                                        type="button"
-                                        className="primary-button"
-                                        onClick={() => fileRef.current?.click()}
-                                    >
-                                        Choose File
-                                    </button>
-                                </div>
-
-                                <input
-                                    type="file"
-                                    name="file"
-                                    style={{display: 'none'}}
-                                    ref={fileRef}
-                                    onChange={handleFileChange}
-                                    required
-                                />
-                            </label>
-
-                            {fileInputState.file ? (
-                                <div className="file-status">
-                                    <span className="file-status__label">Selected</span>
-                                    <strong>{fileInputState.file.name}</strong>
-                                </div>
-                            ) : null}
-
-                            {uploadingFile && uploadProgress !== null ? (
-                                <div className="upload-progress" role="progressbar" aria-valuemin={0}
-                                     aria-valuemax={100} aria-valuenow={uploadProgress}>
-                                    <div className="upload-progress__track">
-                                        <div className="upload-progress__bar" style={{width: `${uploadProgress}%`}}/>
-                                    </div>
-                                    <span className="upload-progress__label">{uploadProgress}%</span>
-                                </div>
-                            ) : null}
-
-                            {uploadErrorMessage ? <p className="auth-form__error">{uploadErrorMessage}</p> : null}
-
-                            <div className="modal__actions">
-                                <button type="button" className="secondary-button" onClick={closeUploadModal}
-                                        disabled={uploadingFile}>
-                                    Cancel
-                                </button>
-                                <button type="submit" className="primary-button"
-                                        disabled={!fileInputState.file || uploadingFile}>
-                                    {uploadingFile ? 'Uploading...' : 'Upload'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <UploadModal
+                    authState={authState}
+                    onLogout={onLogout}
+                    onClose={() => {
+                        setIsUploadModalOpen(false)
+                    }}
+                    onUploaded={(fileId) => {
+                        setIsUploadModalOpen(false)
+                        void (async () => {
+                            await loadFiles()
+                            if (fileId) {
+                                await pollUntilComplete(fileId)
+                            }
+                        })()
+                    }}
+                />
             )}
 
             {fileToShare && (
@@ -309,26 +162,33 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                             </thead>
                             <tbody>
                             {loadingFiles ? (
-                                <tr>
-                                    <td colSpan={4}>Loading files...</td>
-                                </tr>
-                            ) : null}
-                            {!loadingFiles && loadErrorMessage ? (
-                                <tr>
-                                    <td colSpan={4}>{loadErrorMessage}</td>
-                                </tr>
-                            ) : null}
-                            {!loadingFiles && !loadErrorMessage && files.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4}>No files available yet.</td>
-                                </tr>
-                            ) : null}
-                            {files.map((file: FileMetadata) => (
-                                <tr key={file.id}>
-                                    <td>{file.name}</td>
-                                    <td>{file.status}</td>
-                                    <td>{formatFileSize(file.size)}</td>
-                                    <td>
+                                    <tr>
+                                        <td colSpan={4}>Loading files...</td>
+                                    </tr>
+                                ) :
+                                null
+                            }
+                            {
+                                !loadingFiles && loadErrorMessage ? (
+                                    <tr>
+                                        <td colSpan={4}>{loadErrorMessage}</td>
+                                    </tr>
+                                ) : null
+                            }
+                            {
+                                !loadingFiles && !loadErrorMessage && files.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4}>No files available yet.</td>
+                                    </tr>
+                                ) : null
+                            }
+                            {
+                                files.map((file: FileMetadata) => (
+                                    <tr key={file.id}>
+                                        <td>{file.name}</td>
+                                        <td>{file.status}</td>
+                                        <td>{formatFileSize(file.size)}</td>
+                                        <td>
                                         <span style={{
                                             display: 'inline-flex',
                                             gap: '1rem',
@@ -371,9 +231,10 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                                                 <span style={{visibility: 'hidden'}}>Share</span>
                                             )}
                                         </span>
-                                    </td>
-                                </tr>
-                            ))}
+                                        </td>
+                                    </tr>
+                                ))
+                            }
                             </tbody>
                         </table>
                     </div>

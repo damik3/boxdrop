@@ -120,15 +120,21 @@ export function ShareModal({authState, onLogout, fileToShare, onClose}: IShareMo
                                 {shares.map((share) => (
                                     <li key={share.userId} className="share-recipients__item">
                                         <span>{share.email}</span>
-                                        <a
-                                            href="#"
-                                            onClick={(event) => {
-                                                event.preventDefault()
+                                        <button
+                                            type="button"
+                                            className="files-table__action files-table__action--delete"
+                                            aria-label={`Remove access for ${share.email}`}
+                                            data-tooltip="Remove"
+                                            onClick={() => {
                                                 void handleUnshare(share.email)
                                             }}
                                         >
-                                            Remove
-                                        </a>
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                <path d="M4 7h16"/>
+                                                <path d="M9 7V5h6v2"/>
+                                                <path d="M7 7l1 12h8l1-12"/>
+                                            </svg>
+                                        </button>
                                     </li>
                                 ))}
                             </ul>

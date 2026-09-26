@@ -1,5 +1,98 @@
+import type {ReactNode} from "react";
 import type {FileMetadata} from "../api/fileTypes.ts";
 import {formatFileSize} from "../utils.ts";
+
+function ActionButton({label, tone, onClick, children}: {
+    label: string
+    tone: 'download' | 'delete' | 'share'
+    onClick: () => void
+    children: ReactNode
+}) {
+    return (
+        <button
+            type="button"
+            className={`files-table__action files-table__action--${tone}`}
+            aria-label={label}
+            data-tooltip={label}
+            onClick={onClick}
+        >
+            {children}
+        </button>
+    )
+}
+
+function DownloadIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 4v10"/>
+            <path d="m8 10 4 4 4-4"/>
+            <path d="M5 19h14"/>
+        </svg>
+    )
+}
+
+function DeleteIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 7h16"/>
+            <path d="M9 7V5h6v2"/>
+            <path d="M7 7l1 12h8l1-12"/>
+        </svg>
+    )
+}
+
+function CheckIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12.5 10 17.5 19 7"/>
+        </svg>
+    )
+}
+
+function PendingIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 4a8 8 0 1 1-8 8"/>
+        </svg>
+    )
+}
+
+function FailedIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8"/>
+            <path d="m9 9 6 6"/>
+            <path d="m15 9-6 6"/>
+        </svg>
+    )
+}
+
+function FileStatus({status}: {status: FileMetadata['status']}) {
+    const label = status === 'COMPLETED' ? 'Completed' : status === 'PENDING' ? 'In progress' : 'Failed'
+
+    return (
+        <span
+            className={`files-table__status files-table__status--${status.toLowerCase()}`}
+            role="img"
+            aria-label={label}
+            data-tooltip={label}
+        >
+            {status === 'COMPLETED' ? <CheckIcon/> : status === 'PENDING' ? <PendingIcon/> : <FailedIcon/>}
+        </span>
+    )
+}
+
+function ShareIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="6" cy="12" r="2"/>
+            <circle cx="16" cy="7" r="2"/>
+            <circle cx="16" cy="17" r="2"/>
+            <path d="M8 11.2 14 8.2"/>
+            <path d="M8 12.8 14 15.8"/>
+        </svg>
+    )
+}
 
 interface Props {
     title: string
@@ -32,7 +125,7 @@ export function FilesTable({
             <article className="panel panel--wide">
                 <h2>{title}</h2>
                 <div className="files-table-container">
-                    <table className="files-table">
+                    <table className={showUploader ? 'files-table files-table--with-uploader' : 'files-table'}>
                         <thead>
                         <tr>
                             <th scope="col">Name</th>
@@ -67,49 +160,37 @@ export function FilesTable({
                         {
                             files.map((file: FileMetadata) => (
                                 <tr key={file.id}>
-                                    <td>{file.name}</td>
-                                    <td>{file.status}</td>
+                                    <td title={file.name}>{file.name}</td>
+                                    <td><FileStatus status={file.status}/></td>
                                     <td>{formatFileSize(file.size)}</td>
-                                    {showUploader && <td>{file.uploadedBy}</td>}
+                                    {showUploader && (
+                                        <td>
+                                            <span className="files-table__uploader" data-tooltip={file.uploadedBy}>
+                                                <span className="files-table__uploader-text">{file.uploadedBy}</span>
+                                            </span>
+                                        </td>
+                                    )}
                                     <td>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            gap: '1rem',
-                                            justifyContent: 'flex-end',
-                                            minWidth: '9rem'
-                                        }}>
+                                        <span className="files-table__actions">
                                             {file.status === 'COMPLETED' ? (
-                                                <a
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault()
-                                                        handleDownload(file)
-                                                    }}
-                                                >
-                                                    Download
-                                                </a>
+                                                <ActionButton label="Download" tone="download" onClick={() => handleDownload(file)}>
+                                                    <DownloadIcon/>
+                                                </ActionButton>
                                             ) : (
-                                                <span style={{visibility: 'hidden'}}>Download</span>
+                                                <span className="files-table__action files-table__action--spacer" aria-hidden="true"/>
                                             )}
-                                            {showDelete && (<a
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault()
-                                                    handleDelete && handleDelete(file)
-                                                }}
-                                            >
-                                                Delete
-                                            </a>)}
+                                            {showDelete && (
+                                                <ActionButton label="Delete" tone="delete" onClick={() => handleDelete?.(file)}>
+                                                    <DeleteIcon/>
+                                                </ActionButton>
+                                            )}
                                             {showShare && (
                                                 file.status === 'COMPLETED' ? (
-                                                    <a href="#" onClick={(event) => {
-                                                        event.preventDefault();
-                                                        handleShare && handleShare(file)
-                                                    }}>
-                                                        Share
-                                                    </a>
+                                                    <ActionButton label="Share" tone="share" onClick={() => handleShare?.(file)}>
+                                                        <ShareIcon/>
+                                                    </ActionButton>
                                                 ) : (
-                                                    <span style={{visibility: 'hidden'}}>Share</span>
+                                                    <span className="files-table__action files-table__action--spacer" aria-hidden="true"/>
                                                 )
                                             )}
                                         </span>

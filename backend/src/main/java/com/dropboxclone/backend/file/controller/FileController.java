@@ -10,7 +10,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/files")
@@ -58,13 +60,17 @@ public class FileController {
     @GetMapping("/shared")
     public List<GetFilesResponse> getSharedFiles(Authentication authentication) {
         var user = (AuthenticatedUser) authentication.getPrincipal();
-        return fileService.getSharedFiles(user.id())
-                .stream()
+        List<FileMetadata> files = fileService.getSharedFiles(user.id());
+        Map<String, String> emailsByUserId = fileService.getUserEmails(files.stream()
+                .map(FileMetadata::getUploadedByUserId)
+                .collect(Collectors.toSet()));
+        return files.stream()
                 .map(fileMetadata -> new GetFilesResponse(fileMetadata.getId(),
                         fileMetadata.getName(),
                         fileMetadata.getSize(),
                         fileMetadata.getMimeType(),
-                        fileMetadata.getUploadedByUserId(),
+                        emailsByUserId.getOrDefault(fileMetadata.getUploadedByUserId(),
+                                fileMetadata.getUploadedByUserId()),
                         fileMetadata.getStatus().toString()))
                 .toList();
     }

@@ -169,6 +169,15 @@ public class FileService {
                 .toList();
     }
 
+    public Map<String, String> getUserEmails(Collection<String> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        return userRepository.findAllById(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, User::getEmail));
+    }
+
     public List<User> getFileShares(String userId, String fileId) {
         requireOwnedFile(userId, fileId);
         List<String> userIds = sharedFileRepository.findByFileIdAndSharedByUserId(fileId, userId)

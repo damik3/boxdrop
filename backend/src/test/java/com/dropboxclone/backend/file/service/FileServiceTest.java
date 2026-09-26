@@ -187,6 +187,13 @@ class FileServiceTest {
     }
 
     @Test
+    void getUserEmailsReturnsUploaderEmail() {
+        when(userRepository.findAllById(List.of(USER_ID))).thenReturn(List.of(owner()));
+
+        assertThat(fileService.getUserEmails(List.of(USER_ID))).containsEntry(USER_ID, "alice@example.com");
+    }
+
+    @Test
     void shareFileCreatesShareForRecipient() {
         when(userRepository.findByEmail(RECIPIENT_EMAIL)).thenReturn(Optional.of(recipient()));
         when(repository.findById(FILE_ID)).thenReturn(Optional.of(metadata(FileUploadStatus.COMPLETED)));

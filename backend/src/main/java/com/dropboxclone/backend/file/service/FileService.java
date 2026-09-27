@@ -173,9 +173,7 @@ public class FileService {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        return userRepository.findAllById(userIds)
-                .stream()
-                .collect(Collectors.toMap(User::getId, User::getEmail));
+        return userRepository.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, User::getEmail));
     }
 
     public List<User> getFileShares(String userId, String fileId) {
@@ -336,9 +334,9 @@ public class FileService {
         }
     }
 
-//    public List<FileChunk> getParts(String userId, String fileId) {
-//        FileMetadata fileMetadata = requireOwnedFile(userId, fileId);
-//        return fileMetadata.getFileChunks();
-//    }
+    public List<FileChunk> getParts(String userId, String fileId) {
+        FileMetadata fileMetadata = requireOwnedFile(userId, fileId);
+        return fileMetadata.getFileChunks();
+    }
 
 }

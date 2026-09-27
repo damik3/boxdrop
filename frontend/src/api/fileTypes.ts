@@ -7,6 +7,12 @@ export interface FileMetadata {
     status: 'PENDING' | 'COMPLETED' | 'FAILED'
 }
 
+export interface Part {
+    partNumber: number
+    status: 'UPLOADED' | 'UPLOADING' | 'NOT_UPLOADED'
+    fingerprint: string
+}
+
 export interface UploadFileResponse {
     fileId: string
     presignedUrl: string

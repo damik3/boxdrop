@@ -147,15 +147,15 @@ public class FileController {
         fileService.completeMultipartUpload(user.id(), request.fileId());
     }
 
-//    @PostMapping("/multipart-upload/parts")
-//    public List<GetPartsResponseItem> getParts(Authentication authentication, @RequestBody GetPartsRequest request) {
-//        var user = (AuthenticatedUser) authentication.getPrincipal();
-//        return fileService.getParts(user.id(), request.fileId())
-//                .stream()
-//                .map(fileChunk -> new GetPartsResponseItem(fileChunk.getPartNumber(),
-//                        fileChunk.getFileChunkStatus().toString(),
-//                        fileChunk.getFingerprint()))
-//                .toList();
-//    }
+    @GetMapping("/multipart-upload/{fileId}/parts")
+    public List<GetPartsResponseItem> getParts(Authentication authentication, @PathVariable String fileId) {
+        var user = (AuthenticatedUser) authentication.getPrincipal();
+        return fileService.getParts(user.id(), fileId)
+                .stream()
+                .map(fileChunk -> new GetPartsResponseItem(fileChunk.getPartNumber(),
+                        fileChunk.getFileChunkStatus().toString(),
+                        fileChunk.getFingerprint()))
+                .toList();
+    }
 
 }

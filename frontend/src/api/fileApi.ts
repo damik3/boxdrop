@@ -1,7 +1,7 @@
 import type {AuthState} from '../auth/types.ts'
 import type {
     FileExistsResponse, FileMetadata, FileShare, GetDownloadUrlResponse, GetPresignedUrlForMultipartUploadResponse,
-    InitiateMultipartUploadResponse, UploadFileResponse, UploadPartResponse
+    InitiateMultipartUploadResponse, Part, UploadFileResponse, UploadPartResponse
 } from './fileTypes.ts'
 import {parseErrorMessage} from "./common.ts";
 import {authorizedFetch} from "./httpClient.ts";
@@ -91,10 +91,19 @@ export function uploadFile(
 export function uploadPart(
     url: string,
     file: Blob,
+    onProgress?: (percent: number) => void,
 ): Promise<UploadPartResponse> {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.open('PUT', url)
+
+        if (onProgress) {
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    onProgress(Math.round((event.loaded / event.total) * 100))
+                }
+            }
+        }
 
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -378,4 +387,30 @@ export async function completeMultipartUpload(
     if (!response.ok) {
         throw new Error(await parseErrorMessage(response, 'Could not complete multipart upload.'))
     }
+}
+
+export async function getParts(
+    authState: AuthState,
+    fileId: string,
+    onUnauthorized: () => void,
+): Promise<Part[]> {
+
+    const response = await authorizedFetch(
+        authState,
+        `${API_BASE_URL}/files/multipart-upload/${fileId}/parts`,
+        {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+        },
+        onUnauthorized
+    )
+
+    if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Could not get parts for multipart upload.'))
+    }
+
+    return await response.json() as Part[]
 }

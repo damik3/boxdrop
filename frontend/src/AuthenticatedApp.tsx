@@ -153,7 +153,8 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                 />
             )}
 
-            <FilesTable title={"Files"} files={files}
+            <FilesTable title={"Files"}
+                        files={files}
                         loadingFiles={loadingFiles}
                         loadErrorMessage={loadErrorMessage}
                         showDelete={true}

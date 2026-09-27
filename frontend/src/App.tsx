@@ -43,6 +43,19 @@ function App() {
             })
     }, [authState])
 
+    async function handleSubmit(currentMode: AuthMode, values: { email: string; password: string }) {
+        setBusy(true)
+        setErrorMessage(null)
+
+        try {
+            await authenticate(currentMode, values)
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
+        } finally {
+            setBusy(false)
+        }
+    }
+
     if (authState && user) {
         return <AuthenticatedApp authState={authState} onLogout={logout}/>
     }
@@ -56,19 +69,6 @@ function App() {
                 </div>
             </main>
         )
-    }
-
-    async function handleSubmit(currentMode: AuthMode, values: { email: string; password: string }) {
-        setBusy(true)
-        setErrorMessage(null)
-
-        try {
-            await authenticate(currentMode, values)
-        } catch (error) {
-            setErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
-        } finally {
-            setBusy(false)
-        }
     }
 
     return (

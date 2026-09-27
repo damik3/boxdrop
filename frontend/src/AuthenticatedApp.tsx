@@ -153,7 +153,9 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                 />
             )}
 
-            <FilesTable title={"Files"} files={files} loadingFiles={loadingFiles} loadErrorMessage={loadErrorMessage}
+            <FilesTable title={"Files"} files={files}
+                        loadingFiles={loadingFiles}
+                        loadErrorMessage={loadErrorMessage}
                         showDelete={true}
                         showShare={true}
                         showUploader={false}
@@ -163,7 +165,9 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
 
             <div className="horizontal-divider"></div>
 
-            <FilesTable title={"Files shared with me"} files={sharedFiles} loadingFiles={loadingSharedFiles}
+            <FilesTable title={"Files shared with me"}
+                        files={sharedFiles}
+                        loadingFiles={loadingSharedFiles}
                         loadErrorMessage={sharedLoadErrorMessage}
                         showDelete={false}
                         showShare={false}

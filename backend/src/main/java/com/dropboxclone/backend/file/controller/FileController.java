@@ -3,6 +3,7 @@ package com.dropboxclone.backend.file.controller;
 
 import com.dropboxclone.backend.auth.security.AuthenticatedUser;
 import com.dropboxclone.backend.file.model.FileMetadata;
+import com.dropboxclone.backend.file.model.FileUploadStatus;
 import com.dropboxclone.backend.file.request.*;
 import com.dropboxclone.backend.file.response.*;
 import com.dropboxclone.backend.file.service.FileService;
@@ -29,12 +30,7 @@ public class FileController {
         var user = (AuthenticatedUser) authentication.getPrincipal();
         return fileService.getFiles(user.id())
                 .stream()
-                .map(fileMetadata -> new GetFilesResponse(fileMetadata.getId(),
-                        fileMetadata.getName(),
-                        fileMetadata.getSize(),
-                        fileMetadata.getMimeType(),
-                        fileMetadata.getUploadedByUserId(),
-                        fileMetadata.getStatus().toString()))
+                .map(fileMetadata -> toGetFilesResponse(fileMetadata, fileMetadata.getUploadedByUserId()))
                 .toList();
     }
 
@@ -65,13 +61,9 @@ public class FileController {
                 .map(FileMetadata::getUploadedByUserId)
                 .collect(Collectors.toSet()));
         return files.stream()
-                .map(fileMetadata -> new GetFilesResponse(fileMetadata.getId(),
-                        fileMetadata.getName(),
-                        fileMetadata.getSize(),
-                        fileMetadata.getMimeType(),
+                .map(fileMetadata -> toGetFilesResponse(fileMetadata,
                         emailsByUserId.getOrDefault(fileMetadata.getUploadedByUserId(),
-                                fileMetadata.getUploadedByUserId()),
-                        fileMetadata.getStatus().toString()))
+                                fileMetadata.getUploadedByUserId())))
                 .toList();
     }
 
@@ -156,6 +148,18 @@ public class FileController {
                         fileChunk.getFileChunkStatus().toString(),
                         fileChunk.getFingerprint()))
                 .toList();
+    }
+
+    private GetFilesResponse toGetFilesResponse(FileMetadata fileMetadata, String uploadedBy) {
+        boolean resumable = fileMetadata.getStatus() == FileUploadStatus.PENDING
+                && fileMetadata.getS3UploadId() != null;
+        return new GetFilesResponse(fileMetadata.getId(),
+                fileMetadata.getName(),
+                fileMetadata.getSize(),
+                fileMetadata.getMimeType(),
+                uploadedBy,
+                fileMetadata.getStatus().toString(),
+                resumable);
     }
 
 }

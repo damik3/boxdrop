@@ -1,10 +1,10 @@
-import type {ReactNode} from "react";
+import {useRef, type ChangeEvent, type ReactNode} from "react";
 import type {FileMetadata} from "../api/fileTypes.ts";
 import {formatFileSize} from "../utils.ts";
 
 function ActionButton({label, tone, onClick, children}: {
     label: string
-    tone: 'download' | 'delete' | 'share'
+    tone: 'download' | 'delete' | 'share' | 'resume'
     onClick: () => void
     children: ReactNode
 }) {
@@ -57,6 +57,23 @@ function PendingIcon() {
     )
 }
 
+function IncompleteIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M9 6v12"/>
+            <path d="M15 6v12"/>
+        </svg>
+    )
+}
+
+function ResumeIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M8 5v14l11-7z"/>
+        </svg>
+    )
+}
+
 function FailedIcon() {
     return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -67,7 +84,20 @@ function FailedIcon() {
     )
 }
 
-function FileStatus({status}: {status: FileMetadata['status']}) {
+function FileStatus({status, resumable}: {status: FileMetadata['status'], resumable: boolean}) {
+    if (resumable) {
+        return (
+            <span
+                className="files-table__status files-table__status--incomplete"
+                role="img"
+                aria-label="Not finished"
+                data-tooltip="Not finished"
+            >
+                <IncompleteIcon/>
+            </span>
+        )
+    }
+
     const label = status === 'COMPLETED' ? 'Completed' : status === 'PENDING' ? 'In progress' : 'Failed'
 
     return (
@@ -105,6 +135,7 @@ interface Props {
     handleDownload: (file: FileMetadata) => void
     handleDelete?: (file: FileMetadata) => void
     handleShare?: (file: FileMetadata) => void
+    handleResume?: (file: FileMetadata, selected: File) => void
 }
 
 export function FilesTable({
@@ -117,8 +148,28 @@ export function FilesTable({
                                showUploader,
                                handleDownload,
                                handleDelete,
-                               handleShare
+                               handleShare,
+                               handleResume,
                            }: Props) {
+    const resumeInputRef = useRef<HTMLInputElement | null>(null)
+    const resumeTargetRef = useRef<FileMetadata | null>(null)
+
+    const openResumePicker = (file: FileMetadata): void => {
+        resumeTargetRef.current = file
+        if (resumeInputRef.current) {
+            resumeInputRef.current.value = ''
+            resumeInputRef.current.click()
+        }
+    }
+
+    const handleResumeFilePicked = (event: ChangeEvent<HTMLInputElement>): void => {
+        const selected = event.target.files?.[0]
+        const target = resumeTargetRef.current
+        resumeTargetRef.current = null
+        if (selected && target) {
+            handleResume?.(target, selected)
+        }
+    }
 
     return (
         <section className="panel-grid">
@@ -161,7 +212,7 @@ export function FilesTable({
                             files.map((file: FileMetadata) => (
                                 <tr key={file.id}>
                                     <td title={file.name}>{file.name}</td>
-                                    <td><FileStatus status={file.status}/></td>
+                                    <td><FileStatus status={file.status} resumable={file.resumable}/></td>
                                     <td>{formatFileSize(file.size)}</td>
                                     {showUploader && (
                                         <td>
@@ -172,7 +223,11 @@ export function FilesTable({
                                     )}
                                     <td>
                                         <span className="files-table__actions">
-                                            {file.status === 'COMPLETED' ? (
+                                            {file.resumable && handleResume ? (
+                                                <ActionButton label="Resume" tone="resume" onClick={() => openResumePicker(file)}>
+                                                    <ResumeIcon/>
+                                                </ActionButton>
+                                            ) : file.status === 'COMPLETED' ? (
                                                 <ActionButton label="Download" tone="download" onClick={() => handleDownload(file)}>
                                                     <DownloadIcon/>
                                                 </ActionButton>
@@ -201,6 +256,14 @@ export function FilesTable({
                         </tbody>
                     </table>
                 </div>
+                {handleResume && (
+                    <input
+                        ref={resumeInputRef}
+                        type="file"
+                        style={{display: 'none'}}
+                        onChange={handleResumeFilePicked}
+                    />
+                )}
             </article>
         </section>
     )

@@ -16,17 +16,19 @@ interface IUploadModalProps {
     onLogout: () => void
     onClose: () => void
     onUploaded: (fileId?: string) => void,
+    resumeFile?: File
+    expectedFileId?: string
 }
 
 interface FileInput {
     file: File | null
 }
 
-export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadModalProps) {
+export function UploadModal({authState, onLogout, onClose, onUploaded, resumeFile, expectedFileId}: IUploadModalProps) {
 
     const multipart_chunksize = 5 * 1024 * 1024 // 5MB
 
-    const [fileInputState, setFileInputState] = React.useState<FileInput>({file: null})
+    const [fileInputState, setFileInputState] = React.useState<FileInput>({file: resumeFile ?? null})
     const [uploadErrorMessage, setUploadErrorMessage] = React.useState<string | null>(null)
     const [uploadingFile, setUploadingFile] = React.useState(false)
     const [uploadProgress, setUploadProgress] = React.useState<Array<number> | null>(null)
@@ -40,12 +42,22 @@ export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadM
         })
     }
 
-    const multipartUpload = async (file: File): Promise<void> => {
+    const multipartUpload = async (file: File, resumeFileId?: string, isCancelled?: () => boolean): Promise<void> => {
         // TODO: fingerprint can be improved with incremental hashing in order to avoid loading the whole file in memory
         const fingerprint: ArrayBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+        if (isCancelled?.()) {
+            return
+        }
         const {exists, fileId, status} = await fileExists(authState, file.name, toHex(fingerprint), onLogout)
+        if (isCancelled?.()) {
+            return
+        }
         const concurrencyLimit = 10
         const numChunks = Math.ceil(file.size / multipart_chunksize)
+
+        if (resumeFileId && (!exists || fileId !== resumeFileId || status !== 'PENDING')) {
+            throw new Error('Choose the same file to resume this upload.')
+        }
 
         if (!exists) { // Upload from scratch flow
             setUploadProgress(Array(numChunks).fill(0))
@@ -98,6 +110,46 @@ export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadM
         }
     }
 
+    const multipartUploadRef = React.useRef(multipartUpload)
+    multipartUploadRef.current = multipartUpload
+    const resumeAttemptRef = React.useRef(0)
+
+    const startResume = (file: File) => {
+        if (!expectedFileId) {
+            return
+        }
+        const attempt = ++resumeAttemptRef.current
+        setFileInputState({file})
+        setUploadingFile(true)
+        setUploadProgress(null)
+        setUploadErrorMessage(null)
+        void (async () => {
+            try {
+                await multipartUploadRef.current(file, expectedFileId, () => resumeAttemptRef.current !== attempt)
+            } catch (error) {
+                if (resumeAttemptRef.current !== attempt) {
+                    return
+                }
+                setUploadErrorMessage(error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE)
+                setUploadingFile(false)
+                setUploadProgress(null)
+            }
+        })()
+    }
+
+    const startResumeRef = React.useRef(startResume)
+    startResumeRef.current = startResume
+
+    React.useEffect(() => {
+        if (!resumeFile || !expectedFileId) {
+            return
+        }
+        startResumeRef.current(resumeFile)
+        return () => {
+            resumeAttemptRef.current += 1
+        }
+    }, [resumeFile, expectedFileId])
+
     const regularUpload = async (file: File): Promise<void> => {
         const {fileId, presignedUrl} = await requestUploadUrl(authState, file, onLogout)
         await uploadFile(presignedUrl, file, (percent: number) => setUploadProgress([percent]))
@@ -132,6 +184,14 @@ export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadM
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
         const selectedFile = event.target.files?.[0] ?? null
+        event.target.value = ''
+        if (!selectedFile) {
+            return
+        }
+        if (expectedFileId) {
+            startResume(selectedFile)
+            return
+        }
         setUploadErrorMessage(null)
         setFileInputState({file: selectedFile})
     }
@@ -141,7 +201,7 @@ export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadM
         <div className="modal-backdrop">
             <div className="modal" role="dialog" aria-modal="true" aria-labelledby="upload-file-title">
                 <div className="modal__header">
-                    <h3 id="upload-file-title">Upload file</h3>
+                    <h3 id="upload-file-title">{expectedFileId ? 'Resume upload' : 'Upload file'}</h3>
                     <span className="hero__eyebrow">Transfer</span>
                 </div>
 
@@ -159,6 +219,7 @@ export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadM
                                 type="button"
                                 className="primary-button"
                                 onClick={() => fileRef.current?.click()}
+                                disabled={uploadingFile}
                             >
                                 Choose File
                             </button>
@@ -170,7 +231,6 @@ export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadM
                             style={{display: 'none'}}
                             ref={fileRef}
                             onChange={handleFileChange}
-                            required
                         />
                     </label>
 
@@ -205,10 +265,12 @@ export function UploadModal({authState, onLogout, onClose, onUploaded}: IUploadM
                                 disabled={uploadingFile}>
                             Cancel
                         </button>
-                        <button type="submit" className="primary-button"
-                                disabled={!fileInputState.file || uploadingFile}>
-                            {uploadingFile ? 'Uploading...' : 'Upload'}
-                        </button>
+                        {expectedFileId ? null : (
+                            <button type="submit" className="primary-button"
+                                    disabled={!fileInputState.file || uploadingFile}>
+                                {uploadingFile ? 'Uploading...' : 'Upload'}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>

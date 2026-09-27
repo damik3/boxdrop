@@ -5,6 +5,7 @@ export interface FileMetadata {
     mimeType: string
     uploadedBy: string
     status: 'PENDING' | 'COMPLETED' | 'FAILED'
+    resumable: boolean
 }
 
 export interface Part {

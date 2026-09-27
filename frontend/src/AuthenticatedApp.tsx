@@ -28,6 +28,7 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
     const [sharedLoadErrorMessage, setSharedLoadErrorMessage] = React.useState<string | null>(null)
 
     const [isUploadModalOpen, setIsUploadModalOpen] = React.useState(false)
+    const [resumeRequest, setResumeRequest] = React.useState<{file: File, fileId: string} | null>(null)
     const [fileToShare, setFileToShare] = React.useState<FileMetadata | null>(null)
 
     const loadFiles = React.useCallback(async () => {
@@ -91,6 +92,11 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
         }
     }
 
+    const handleResume = (target: FileMetadata, selected: File): void => {
+        setIsUploadModalOpen(false)
+        setResumeRequest({file: selected, fileId: target.id})
+    }
+
     const handleDownloadFile = async (
         file: FileMetadata,
         setError: (message: string | null) => void
@@ -123,15 +129,19 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                 </div>
             </section>
 
-            {isUploadModalOpen && (
+            {(isUploadModalOpen || resumeRequest) && (
                 <UploadModal
                     authState={authState}
                     onLogout={onLogout}
+                    resumeFile={resumeRequest?.file}
+                    expectedFileId={resumeRequest?.fileId}
                     onClose={() => {
                         setIsUploadModalOpen(false)
+                        setResumeRequest(null)
                     }}
                     onUploaded={(fileId) => {
                         setIsUploadModalOpen(false)
+                        setResumeRequest(null)
                         void (async () => {
                             await loadFiles()
                             if (fileId) {
@@ -162,7 +172,8 @@ export function AuthenticatedApp({authState, onLogout}: AuthenticatedAppProps) {
                         showUploader={false}
                         handleDownload={(file) => handleDownloadFile(file, setLoadErrorMessage)}
                         handleDelete={handleDeleteFile}
-                        handleShare={(file) => setFileToShare(file)}/>
+                        handleShare={(file) => setFileToShare(file)}
+                        handleResume={handleResume}/>
 
             <div className="horizontal-divider"></div>
 

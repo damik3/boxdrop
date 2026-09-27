@@ -284,6 +284,16 @@
   background: #99f6e4;
 }
 
+.files-table__action--resume {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.files-table__action--resume:hover,
+.files-table__action--resume:focus-visible {
+  background: #fed7aa;
+}
+
 .files-table__action--spacer {
   visibility: hidden;
   pointer-events: none;
@@ -314,6 +324,10 @@
 
 .files-table__status--pending svg {
   animation: spin 0.8s linear infinite;
+}
+
+.files-table__status--incomplete {
+  color: #b45309;
 }
 
 .files-table__status--failed {

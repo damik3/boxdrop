@@ -12,7 +12,7 @@
 - Auth works end-to-end, including access-token refresh via an httpOnly refresh-token cookie.
 - Protected UI supports listing, uploading, downloading, deleting, and sharing files.
 - File APIs (`/api/files`):
-  - `GET /` — list `PENDING`, `COMPLETED`, and `FAILED` files owned by the current user (no download URL on the list DTO; `uploadedBy` is the owner user id)
+  - `GET /` — list `PENDING`, `COMPLETED`, and `FAILED` files owned by the current user (no download URL on the list DTO; `uploadedBy` is the owner user id; `resumable` is true for a `PENDING` multipart upload)
   - `POST /upload/presigned-url` — single-shot upload (files ≤ 5MB): create `PENDING` metadata, return `{ fileId, presignedUrl }`
   - `POST /exists` — `{ filename, fingerprint }` → `{ exists, fileId?, status? }` for this user's file with that name and SHA-256 fingerprint
   - `POST /multipart-upload` — files > 5MB: create `PENDING` metadata with `NOT_UPLOADED` chunks, start an S3 multipart upload, return `{ fileId }`

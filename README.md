@@ -1,6 +1,6 @@
-# Dropbox Clone
+# Boxdrop
 
-A learning project with a React/Vite frontend and a Spring Boot backend. You can register, upload, download, delete, and share files. MongoDB stores metadata; MinIO stores files; ElasticMQ handles object-created notifications.
+Boxdrop is a learning project similar to dropbox. It uses a React/Vite frontend and a Spring Boot backend. You can register, upload, download, delete, and share files. MongoDB stores metadata; MinIO stores files; ElasticMQ handles object-created notifications.
 
 ## Run locally
 

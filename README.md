@@ -1,45 +1,43 @@
 # Dropbox Clone
 
-Initial scaffolding for a Dropbox-clone learning project built with Spring Boot, React, MongoDB, MinIO, and Docker Compose.
+A learning project with a React/Vite frontend and a Spring Boot backend. You can register, upload, download, delete, and share files. MongoDB stores metadata; MinIO stores files; ElasticMQ handles object-created notifications.
 
-## Services
-- `backend`: Spring Boot API
-- `frontend`: React + Vite application
-- `mongodb`: metadata store
-- `minio`: S3-compatible object storage
-- `elasticmq`: SQS-compatible queue for object-created events
-- `sqs-bridge`: MinIO webhook → ElasticMQ (MinIO has no native SQS target)
-- `minio-init`: creates the app bucket and registers PUT notifications
+## Run locally
 
-PUT to the bucket is forwarded as an S3-style event JSON message onto queue `s3-object-created` (`http://localhost:9324/000000000000/s3-object-created` from the host).
+You need Docker with Compose and Node.js/npm. From the repository root, create a `.env` file for Docker Compose. Generate a local JWT secret with `openssl rand -base64 32` and paste its output into `APP_AUTH_JWT_SECRET`:
 
-## Local development
-### Run with Docker Compose
+```dotenv
+SPRING_MONGODB_URI=mongodb://mongodb:27017/dropbox_clone
+APP_STORAGE_ENDPOINT=http://minio:9000
+APP_STORAGE_PUBLIC_ENDPOINT=http://localhost:9000
+APP_STORAGE_ACCESS_KEY=minioadmin
+APP_STORAGE_SECRET_KEY=minioadmin
+APP_STORAGE_BUCKET=dropbox-clone
+APP_STORAGE_REGION=us-east-1
+APP_AUTH_JWT_SECRET=<paste generated secret here>
+APP_AUTH_JWT_TTL=3600
+APP_AUTH_REFRESH_TTL_DAYS=30
+APP_FRONTEND_ORIGIN=http://localhost:5173
+APP_SQS_ENDPOINT=http://elasticmq:9324
+APP_SQS_QUEUE_URL=http://elasticmq:9324/000000000000/s3-object-created
+APP_SQS_ACCESS_KEY=x
+APP_SQS_SECRET_KEY=x
+```
+
+Start the backend and its dependencies:
+
 ```bash
 docker compose up --build
 ```
 
-### Run services individually
-```bash
-cd backend
-./mvnw spring-boot:run
-```
+In a second terminal, start the frontend:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-## Environment
-Copy the example files if you want to override defaults:
+Open http://localhost:5173 and register an account. The API is at http://localhost:8080/api; the MinIO console is at http://localhost:9001 (local credentials: `minioadmin` / `minioadmin`). To stop the stack, run `docker compose down` from the repository root.
 
-- `backend/.env.example`
-- `frontend/.env.example`
-
-## Initial scope
-- Upload and download flows
-- Multipart upload groundwork
-- Sharing groundwork
-- MongoDB metadata storage
-- MinIO object storage integration points
+The frontend defaults to `http://localhost:8080/api`; set `VITE_API_BASE_URL` in `frontend/.env` only if your API runs elsewhere. The values above are for local development only. See [the design document](design/design.md) for the longer-term system design.

@@ -7,6 +7,13 @@
 - `design/design.md`: High-level product and system-design target for future iterations; read it before making architectural changes.
 - `docker-compose.yml`: Local stack — MongoDB, MinIO, ElasticMQ, MinIO→SQS webhook bridge (`infra/`), and the backend. Frontend compose service is commented out.
 
+## Running locally
+
+- Follow `README.md` for the required root `.env` values and startup steps. Compose reads the root `.env`; `backend/.env.example` is not a complete Compose configuration and uses host-facing endpoints.
+- Run `docker compose up --build` from the repository root for the backend and infrastructure. Run `npm ci && npm run dev` in `frontend/` separately (the Compose frontend service is disabled).
+- Backend-to-service URLs use Compose hostnames (`mongodb`, `minio`, `elasticmq`); `APP_STORAGE_PUBLIC_ENDPOINT` must use `http://localhost:9000` so presigned URLs work in the browser. Allow `http://localhost:5173` via `APP_FRONTEND_ORIGIN`.
+- Generate a local Base64 JWT signing key with `openssl rand -base64 32`. The frontend defaults to `http://localhost:8080/api`; the UI runs at `http://localhost:5173`.
+
 ## Current implementation status
 
 - Auth works end-to-end, including access-token refresh via an httpOnly refresh-token cookie.

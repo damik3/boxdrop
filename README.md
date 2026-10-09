@@ -43,3 +43,10 @@ Copy the example files if you want to override defaults:
 - Sharing groundwork
 - MongoDB metadata storage
 - MinIO object storage integration points
+
+Pending single-shot uploads are reconciled after 15 minutes: an existing object
+completes the record, otherwise it is marked failed. Multipart uploads remain
+resumable until seven days without a part URL request, verified part upload, or
+completion attempt. After that, the backend aborts the multipart session and
+marks the record failed. Listing files or inspecting parts does not extend the
+retention window.

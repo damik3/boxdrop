@@ -5,13 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.dropboxclone.backend.file.model.FileMetadata;
+import com.dropboxclone.backend.file.model.FileChunk;
+import com.dropboxclone.backend.file.model.FileChunkStatus;
 import com.dropboxclone.backend.file.model.FileUploadStatus;
 import com.dropboxclone.backend.file.model.SharedFile;
 import com.dropboxclone.backend.file.repository.FileMetadataRepository;
@@ -31,6 +35,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import software.amazon.awssdk.services.s3.model.ListPartsResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchUploadException;
+import software.amazon.awssdk.services.s3.model.Part;
 
 class FileServiceTest {
 
@@ -324,9 +331,9 @@ class FileServiceTest {
 
         fileService.completeByStorageKey(STORAGE_KEY);
 
-        assertThat(pending.getStatus()).isEqualTo(FileUploadStatus.COMPLETED);
-        assertThat(pending.getUpdatedAt()).isNotNull();
-        verify(repository).save(pending);
+        verify(repository).transitionStatus(eq(FILE_ID), eq(FileUploadStatus.PENDING),
+                eq(FileUploadStatus.COMPLETED), any());
+        verify(repository, never()).save(any(FileMetadata.class));
     }
 
     @Test
@@ -337,35 +344,37 @@ class FileServiceTest {
 
         fileService.completeByStorageKey(STORAGE_KEY);
 
-        assertThat(failed.getStatus()).isEqualTo(FileUploadStatus.COMPLETED);
+        verify(repository).transitionStatus(eq(FILE_ID), eq(FileUploadStatus.FAILED),
+                eq(FileUploadStatus.COMPLETED), any());
     }
 
     @Test
     void expireStalePendingCompletesWhenObjectExists() {
         Instant now = Instant.parse("2026-01-01T00:20:00Z");
         FileMetadata stale = metadata(FileUploadStatus.PENDING);
-        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any())).thenReturn(List.of(stale));
+        when(repository.findByStatusAndS3UploadIdIsNullAndCreatedAtBefore(
+                FileUploadStatus.PENDING, now.minus(FileService.STALE_PENDING_TTL))).thenReturn(List.of(stale));
         when(s3Service.objectExists(STORAGE_KEY)).thenReturn(true);
 
         fileService.expireStalePendingUploads(now);
 
-        assertThat(stale.getStatus()).isEqualTo(FileUploadStatus.COMPLETED);
-        assertThat(stale.getUpdatedAt()).isEqualTo(now);
-        verify(repository).save(stale);
+        verify(repository).expireSingleUpload(FILE_ID, FileUploadStatus.PENDING,
+                now.minus(FileService.STALE_PENDING_TTL), FileUploadStatus.COMPLETED, now);
     }
 
     @Test
     void expireStalePendingFailsWhenObjectMissing() {
         Instant now = Instant.parse("2026-01-01T00:20:00Z");
         FileMetadata stale = metadata(FileUploadStatus.PENDING);
-        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any())).thenReturn(List.of(stale));
+        when(repository.findByStatusAndS3UploadIdIsNullAndCreatedAtBefore(
+                FileUploadStatus.PENDING, now.minus(FileService.STALE_PENDING_TTL))).thenReturn(List.of(stale));
         when(s3Service.objectExists(STORAGE_KEY)).thenReturn(false);
 
         fileService.expireStalePendingUploads(now);
 
-        assertThat(stale.getStatus()).isEqualTo(FileUploadStatus.FAILED);
         verify(s3Service).objectExists(STORAGE_KEY);
-        verify(repository).save(stale);
+        verify(repository).expireSingleUpload(FILE_ID, FileUploadStatus.PENDING,
+                now.minus(FileService.STALE_PENDING_TTL), FileUploadStatus.FAILED, now);
     }
 
     @Test
@@ -373,12 +382,210 @@ class FileServiceTest {
         Instant now = Instant.parse("2026-01-01T00:20:00Z");
         FileMetadata stale = metadata(FileUploadStatus.PENDING);
         stale.setStorageKey(null);
-        when(repository.findByStatusAndCreatedAtBefore(eq(FileUploadStatus.PENDING), any())).thenReturn(List.of(stale));
+        when(repository.findByStatusAndS3UploadIdIsNullAndCreatedAtBefore(
+                FileUploadStatus.PENDING, now.minus(FileService.STALE_PENDING_TTL))).thenReturn(List.of(stale));
 
         fileService.expireStalePendingUploads(now);
 
-        assertThat(stale.getStatus()).isEqualTo(FileUploadStatus.FAILED);
+        verify(repository).expireSingleUpload(FILE_ID, FileUploadStatus.PENDING,
+                now.minus(FileService.STALE_PENDING_TTL), FileUploadStatus.FAILED, now);
         verify(s3Service, never()).objectExists(anyString());
+    }
+
+    @Test
+    void multipartSweepUsesSevenDayInactivityAndAbortsOnlyClaimedUploads() {
+        Instant now = Instant.parse("2026-01-10T00:00:00Z");
+        FileMetadata stale = multipart(FileUploadStatus.PENDING);
+        when(repository.findInactiveMultipartUploads(FileUploadStatus.PENDING,
+                now.minus(FileService.INACTIVE_MULTIPART_TTL))).thenReturn(List.of(stale));
+        when(repository.expireMultipart(FILE_ID, FileUploadStatus.PENDING,
+                now.minus(FileService.INACTIVE_MULTIPART_TTL), FileUploadStatus.FAILED, now)).thenReturn(1L);
+
+        fileService.expireStalePendingUploads(now);
+
+        verify(s3Service).abortMultipartUpload(STORAGE_KEY, "upload-1");
+        verify(repository).clearAbortedUpload(FILE_ID, FileUploadStatus.FAILED, "upload-1");
+        verify(repository).findByStatusAndS3UploadIdIsNullAndCreatedAtBefore(
+                FileUploadStatus.PENDING, now.minus(FileService.STALE_PENDING_TTL));
+    }
+
+    @Test
+    void multipartSweepDoesNotAbortAfterConcurrentActivity() {
+        Instant now = Instant.parse("2026-01-10T00:00:00Z");
+        when(repository.findInactiveMultipartUploads(FileUploadStatus.PENDING,
+                now.minus(FileService.INACTIVE_MULTIPART_TTL))).thenReturn(List.of(multipart(FileUploadStatus.PENDING)));
+
+        fileService.expireStalePendingUploads(now);
+
+        verify(s3Service, never()).abortMultipartUpload(anyString(), anyString());
+    }
+
+    @Test
+    void multipartSweepRecoversCompletedObjectInsteadOfAborting() {
+        Instant now = Instant.parse("2026-01-10T00:00:00Z");
+        when(repository.findInactiveMultipartUploads(FileUploadStatus.PENDING,
+                now.minus(FileService.INACTIVE_MULTIPART_TTL))).thenReturn(List.of(multipart(FileUploadStatus.PENDING)));
+        when(s3Service.objectExists(STORAGE_KEY)).thenReturn(true);
+
+        fileService.expireStalePendingUploads(now);
+
+        verify(repository).transitionStatus(FILE_ID, FileUploadStatus.PENDING, FileUploadStatus.COMPLETED, now);
+        verify(s3Service, never()).abortMultipartUpload(anyString(), anyString());
+    }
+
+    @Test
+    void abortFailureLeavesFailedUploadAvailableForRetry() {
+        Instant now = Instant.parse("2026-01-10T00:00:00Z");
+        FileMetadata stale = multipart(FileUploadStatus.PENDING);
+        when(repository.findInactiveMultipartUploads(FileUploadStatus.PENDING,
+                now.minus(FileService.INACTIVE_MULTIPART_TTL))).thenReturn(List.of(stale));
+        when(repository.expireMultipart(FILE_ID, FileUploadStatus.PENDING,
+                now.minus(FileService.INACTIVE_MULTIPART_TTL), FileUploadStatus.FAILED, now)).thenReturn(1L);
+        doThrow(new IllegalStateException("S3 unavailable")).when(s3Service)
+                .abortMultipartUpload(STORAGE_KEY, "upload-1");
+
+        assertThatThrownBy(() -> fileService.expireStalePendingUploads(now)).hasMessage("S3 unavailable");
+        verify(repository, never()).clearAbortedUpload(FILE_ID, FileUploadStatus.FAILED, "upload-1");
+        when(repository.findInactiveMultipartUploads(FileUploadStatus.PENDING,
+                now.minus(FileService.INACTIVE_MULTIPART_TTL))).thenReturn(List.of());
+        when(repository.findByStatusAndS3UploadIdIsNotNull(FileUploadStatus.FAILED)).thenReturn(
+                List.of(multipart(FileUploadStatus.FAILED)));
+        reset(s3Service);
+
+        fileService.expireStalePendingUploads(now);
+
+        verify(s3Service).abortMultipartUpload(STORAGE_KEY, "upload-1");
+        verify(repository).clearAbortedUpload(FILE_ID, FileUploadStatus.FAILED, "upload-1");
+    }
+
+    @Test
+    void presignedPartRequestRefreshesActivityOnlyWhenPending() {
+        FileMetadata file = multipart(FileUploadStatus.PENDING);
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(file));
+        when(s3Service.presignUploadPart(eq(STORAGE_KEY), eq("upload-1"), eq(1), any()))
+                .thenReturn("https://example.test/part");
+        when(repository.touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any())).thenReturn(true);
+
+        assertThat(fileService.presignUploadPart(USER_ID, FILE_ID, 1)).isEqualTo("https://example.test/part");
+        verify(repository).touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any());
+
+        file.setStatus(FileUploadStatus.FAILED);
+        assertThatThrownBy(() -> fileService.presignUploadPart(USER_ID, FILE_ID, 1))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void invalidPartRequestDoesNotRefreshActivity() {
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(multipart(FileUploadStatus.PENDING)));
+
+        assertThatThrownBy(() -> fileService.presignUploadPart(USER_ID, FILE_ID, 2))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(repository, never()).touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any());
+    }
+
+    @Test
+    void verifiedPartRefreshesActivityAtomically() {
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(multipart(FileUploadStatus.PENDING)));
+        when(s3Service.listParts(STORAGE_KEY, "upload-1")).thenReturn(ListPartsResponse.builder()
+                .parts(Part.builder().partNumber(1).eTag("etag-1").build()).build());
+        when(repository.markChunkUploaded(eq(FILE_ID), eq(FileUploadStatus.PENDING), eq(1),
+                eq(FileChunkStatus.UPLOADED), eq("fingerprint"), eq("etag-1"), any())).thenReturn(true);
+
+        fileService.patchMultipartUpload(USER_ID, FILE_ID, 1, "fingerprint", "etag-1");
+
+        verify(repository).markChunkUploaded(eq(FILE_ID), eq(FileUploadStatus.PENDING), eq(1),
+                eq(FileChunkStatus.UPLOADED), eq("fingerprint"), eq("etag-1"), any());
+    }
+
+    @Test
+    void completionAttemptRefreshesActivityEvenWhenPartsAreMissing() {
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(multipart(FileUploadStatus.PENDING)));
+        when(repository.touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any())).thenReturn(true);
+        when(s3Service.listParts(STORAGE_KEY, "upload-1")).thenReturn(ListPartsResponse.builder().build());
+
+        assertThatThrownBy(() -> fileService.completeMultipartUpload(USER_ID, FILE_ID))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(repository).touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any());
+        verify(s3Service, never()).completeMultipartUpload(anyString(), anyString(), any());
+    }
+
+    @Test
+    void completionCannotProceedIfSweeperClaimedUpload() {
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(multipart(FileUploadStatus.PENDING)));
+
+        assertThatThrownBy(() -> fileService.completeMultipartUpload(USER_ID, FILE_ID))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(s3Service, never()).listParts(anyString(), anyString());
+    }
+
+    @Test
+    void successfulCompletionChangesPendingStatusWithoutOverwritingActivity() {
+        FileMetadata file = multipart(FileUploadStatus.PENDING);
+        file.getFileChunks().getFirst().setFileChunkStatus(FileChunkStatus.UPLOADED);
+        file.getFileChunks().getFirst().setEtag("etag-1");
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(file));
+        when(repository.touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any())).thenReturn(true);
+        when(s3Service.listParts(STORAGE_KEY, "upload-1")).thenReturn(ListPartsResponse.builder()
+                .parts(Part.builder().partNumber(1).eTag("etag-1").build()).build());
+        when(repository.transitionStatus(eq(FILE_ID), eq(FileUploadStatus.PENDING),
+                eq(FileUploadStatus.COMPLETED), any())).thenReturn(1L);
+
+        fileService.completeMultipartUpload(USER_ID, FILE_ID);
+
+        verify(s3Service).completeMultipartUpload(eq(STORAGE_KEY), eq("upload-1"), any());
+        verify(repository).transitionStatus(eq(FILE_ID), eq(FileUploadStatus.PENDING),
+                eq(FileUploadStatus.COMPLETED), any());
+        verify(repository, never()).save(any(FileMetadata.class));
+    }
+
+    @Test
+    void completionRemainsIdempotentWhenObjectNotificationWinsTheRace() {
+        FileMetadata file = multipart(FileUploadStatus.PENDING);
+        file.getFileChunks().getFirst().setFileChunkStatus(FileChunkStatus.UPLOADED);
+        file.getFileChunks().getFirst().setEtag("etag-1");
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(file), Optional.of(multipart(FileUploadStatus.COMPLETED)));
+        when(repository.touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any())).thenReturn(true);
+        when(s3Service.listParts(STORAGE_KEY, "upload-1")).thenReturn(ListPartsResponse.builder()
+                .parts(Part.builder().partNumber(1).eTag("etag-1").build()).build());
+
+        fileService.completeMultipartUpload(USER_ID, FILE_ID);
+
+        verify(s3Service).completeMultipartUpload(eq(STORAGE_KEY), eq("upload-1"), any());
+    }
+
+    @Test
+    void readingPartsDoesNotRefreshActivity() {
+        when(repository.findById(FILE_ID)).thenReturn(Optional.of(multipart(FileUploadStatus.PENDING)));
+
+        assertThat(fileService.getParts(USER_ID, FILE_ID)).hasSize(1);
+
+        verify(repository, never()).touchMultipart(eq(FILE_ID), eq(FileUploadStatus.PENDING), any());
+    }
+
+    @Test
+    void missingMultipartSessionIsClearedAfterConfirmingNoCompletedObject() {
+        Instant now = Instant.parse("2026-01-10T00:00:00Z");
+        when(repository.findByStatusAndS3UploadIdIsNotNull(FileUploadStatus.FAILED)).thenReturn(
+                List.of(multipart(FileUploadStatus.FAILED)));
+        doThrow(NoSuchUploadException.builder().statusCode(404).build()).when(s3Service)
+                .abortMultipartUpload(STORAGE_KEY, "upload-1");
+
+        fileService.expireStalePendingUploads(now);
+
+        verify(repository).clearAbortedUpload(FILE_ID, FileUploadStatus.FAILED, "upload-1");
+    }
+
+    private FileMetadata multipart(FileUploadStatus status) {
+        FileMetadata file = metadata(status);
+        file.setS3UploadId("upload-1");
+        file.setFileChunks(List.of(FileChunk.builder()
+                .partNumber(1)
+                .fileChunkStatus(FileChunkStatus.NOT_UPLOADED)
+                .build()));
+        return file;
     }
 
     private void assertBadRequest(GetPresignedUrlRequest request) {

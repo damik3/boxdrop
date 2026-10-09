@@ -65,8 +65,11 @@ public class S3Service {
         try {
             s3Client.headObject(HeadObjectRequest.builder().bucket(storageProperties.bucket()).key(key).build());
             return true;
-        } catch (NoSuchKeyException exception) {
-            return false;
+        } catch (S3Exception exception) {
+            if (exception.statusCode() == 404) {
+                return false;
+            }
+            throw exception;
         }
     }
 

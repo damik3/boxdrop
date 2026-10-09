@@ -12,6 +12,7 @@ import com.dropboxclone.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
 import software.amazon.awssdk.services.s3.model.ListPartsResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchUploadException;
 import software.amazon.awssdk.services.s3.model.Part;
 
 import java.time.Duration;
@@ -27,6 +28,7 @@ public class FileService {
     private static final Set<String> ALLOWED_TYPES = Set.of("image/png", "image/jpeg", "application/pdf");
     static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
     static final Duration STALE_PENDING_TTL = Duration.ofMinutes(15);
+    static final Duration INACTIVE_MULTIPART_TTL = Duration.ofDays(7);
 
     private final FileMetadataRepository fileMetadataRepository;
     private final S3Service s3Service;
@@ -141,21 +143,55 @@ public class FileService {
         if (!s3Service.objectExists(storageKey)) {
             throw new NoSuchElementException("File %s not found".formatted(storageKey));
         }
-        file.setStatus(FileUploadStatus.COMPLETED);
-        file.setUpdatedAt(Instant.now());
-        fileMetadataRepository.save(file);
+        fileMetadataRepository.transitionStatus(file.getId(), file.getStatus(), FileUploadStatus.COMPLETED,
+                Instant.now());
     }
 
     public void expireStalePendingUploads(Instant now) {
-        Instant cutoff = now.minus(STALE_PENDING_TTL);
-        List<FileMetadata> stale = fileMetadataRepository.findByStatusAndCreatedAtBefore(FileUploadStatus.PENDING,
-                cutoff);
+        Instant singleCutoff = now.minus(STALE_PENDING_TTL);
+        List<FileMetadata> stale = fileMetadataRepository.findByStatusAndS3UploadIdIsNullAndCreatedAtBefore(
+                FileUploadStatus.PENDING, singleCutoff);
         for (FileMetadata file : stale) {
             boolean objectExists = file.getStorageKey() != null && s3Service.objectExists(file.getStorageKey());
-            file.setStatus(objectExists ? FileUploadStatus.COMPLETED : FileUploadStatus.FAILED);
-            file.setUpdatedAt(now);
-            fileMetadataRepository.save(file);
+            fileMetadataRepository.expireSingleUpload(file.getId(), FileUploadStatus.PENDING, singleCutoff,
+                    objectExists ? FileUploadStatus.COMPLETED : FileUploadStatus.FAILED, now);
         }
+
+        Instant cutoff = now.minus(INACTIVE_MULTIPART_TTL);
+        for (FileMetadata file : fileMetadataRepository.findInactiveMultipartUploads(FileUploadStatus.PENDING, cutoff)) {
+            if (file.getStorageKey() != null && s3Service.objectExists(file.getStorageKey())) {
+                fileMetadataRepository.transitionStatus(file.getId(), FileUploadStatus.PENDING,
+                        FileUploadStatus.COMPLETED, now);
+            } else if (fileMetadataRepository.expireMultipart(file.getId(), FileUploadStatus.PENDING, cutoff,
+                    FileUploadStatus.FAILED, now) != 0) {
+                abortExpiredMultipart(file);
+            }
+        }
+
+        for (FileMetadata file : fileMetadataRepository.findByStatusAndS3UploadIdIsNotNull(FileUploadStatus.FAILED)) {
+            abortExpiredMultipart(file);
+        }
+    }
+
+    private void abortExpiredMultipart(FileMetadata file) {
+        if (file.getStorageKey() == null) {
+            throw new IllegalStateException("Multipart upload " + file.getId() + " has no storage key");
+        }
+        if (s3Service.objectExists(file.getStorageKey())) {
+            fileMetadataRepository.transitionStatus(file.getId(), FileUploadStatus.FAILED,
+                    FileUploadStatus.COMPLETED, Instant.now());
+            return;
+        }
+        try {
+            s3Service.abortMultipartUpload(file.getStorageKey(), file.getS3UploadId());
+        } catch (NoSuchUploadException exception) {
+            if (s3Service.objectExists(file.getStorageKey())) {
+                fileMetadataRepository.transitionStatus(file.getId(), FileUploadStatus.FAILED,
+                        FileUploadStatus.COMPLETED, Instant.now());
+                return;
+            }
+        }
+        fileMetadataRepository.clearAbortedUpload(file.getId(), FileUploadStatus.FAILED, file.getS3UploadId());
     }
 
     public List<FileMetadata> getSharedFiles(String userId) {
@@ -281,9 +317,22 @@ public class FileService {
 
     public String presignUploadPart(String userId, String fileId, int partNumber) {
         FileMetadata fileMetadata = requireOwnedFile(userId, fileId);
+        if (fileMetadata.getStatus() != FileUploadStatus.PENDING || fileMetadata.getS3UploadId() == null ||
+                fileMetadata.getFileChunks() == null ||
+                fileMetadata.getFileChunks().stream().noneMatch(chunk -> chunk.getPartNumber() == partNumber)) {
+            throw ApiError.FILE_NOT_UPLOADED.exception();
+        }
         String key = fileMetadata.getStorageKey();
         Duration ttl = Duration.ofMinutes(15);
-        return s3Service.presignUploadPart(key, fileMetadata.getS3UploadId(), partNumber, ttl);
+        String url = s3Service.presignUploadPart(key, fileMetadata.getS3UploadId(), partNumber, ttl);
+        touchPendingMultipart(fileId);
+        return url;
+    }
+
+    private void touchPendingMultipart(String fileId) {
+        if (!fileMetadataRepository.touchMultipart(fileId, FileUploadStatus.PENDING, Instant.now())) {
+            throw ApiError.FILE_NOT_UPLOADED.exception();
+        }
     }
 
     public void patchMultipartUpload(String userId,
@@ -292,13 +341,19 @@ public class FileService {
             String fingerprint,
             String etag) {
         FileMetadata file = requireOwnedFile(userId, fileId);
+        if (file.getStatus() != FileUploadStatus.PENDING || file.getS3UploadId() == null) {
+            throw ApiError.FILE_NOT_UPLOADED.exception();
+        }
         String key = file.getStorageKey();
         ListPartsResponse listPartsResponse = s3Service.listParts(key, file.getS3UploadId());
         boolean valid = listPartsResponse.parts()
                 .stream()
                 .anyMatch(part -> part.eTag().equals(etag) && Objects.equals(part.partNumber(), partNumber));
         if (valid) {
-            fileMetadataRepository.markChunkUploaded(fileId, partNumber, FileChunkStatus.UPLOADED, fingerprint, etag);
+            if (!fileMetadataRepository.markChunkUploaded(fileId, FileUploadStatus.PENDING, partNumber,
+                    FileChunkStatus.UPLOADED, fingerprint, etag, Instant.now())) {
+                throw ApiError.FILE_NOT_UPLOADED.exception();
+            }
         } else {
             throw ApiError.FILE_NOT_UPLOADED.exception();
         }
@@ -313,6 +368,7 @@ public class FileService {
         if (file.getStatus().equals(FileUploadStatus.COMPLETED)) {
             return;
         }
+        touchPendingMultipart(fileId);
         String key = file.getStorageKey();
         List<Part> parts = s3Service.listParts(key, file.getS3UploadId()).parts();
 
@@ -327,8 +383,14 @@ public class FileService {
 
         if (complete) {
             s3Service.completeMultipartUpload(key, file.getS3UploadId(), parts);
-            file.setStatus(FileUploadStatus.COMPLETED);
-            fileMetadataRepository.save(file);
+            if (fileMetadataRepository.transitionStatus(fileId, FileUploadStatus.PENDING,
+                    FileUploadStatus.COMPLETED, Instant.now()) == 0) {
+                FileMetadata current = fileMetadataRepository.findById(fileId)
+                        .orElseThrow(ApiError.FILE_NOT_FOUND::exception);
+                if (current.getStatus() != FileUploadStatus.COMPLETED) {
+                    throw ApiError.FILE_NOT_UPLOADED.exception();
+                }
+            }
         } else {
             throw ApiError.FILE_NOT_UPLOADED.exception();
         }
